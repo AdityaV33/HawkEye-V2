@@ -141,6 +141,10 @@ class PoseDetector:
 
         log.info("Loading pose model %s on %s", self.model_path, self.device)
         self._model = YOLO(self.model_path)
+        try:
+            self._model.to(self.device)
+        except Exception as e:
+            log.warning("Could not move pose model to %s: %s", self.device, e)
         return self
 
     def _parse(self, r) -> List[PersonDetection]:

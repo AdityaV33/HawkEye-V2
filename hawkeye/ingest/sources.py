@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 from typing import Optional
 
 import numpy as np
@@ -88,9 +89,9 @@ class VideoSource:
 class ScreenSource(VideoSource):
     """Real-time desktop screen capture source.
 
-    On Wayland (default on modern Linux), uses `grim` to capture compositor
-    pixels directly without Wayland security black-screen blocking.
-    Falls back to `mss` on X11 / Windows / macOS.
+    On Wayland (default on modern Linux), uses fast uncompressed `grim -t ppm`
+    inside a background grabber thread, eliminating capture wait time from the
+    inference pipeline. Falls back to `mss` on X11 / Windows / macOS.
     """
 
     def __init__(self, spec: str = "screen", width: int = 0, height: int = 0):
@@ -99,6 +100,11 @@ class ScreenSource(VideoSource):
         self._mon = None
         self._is_wayland = False
         self._grim_cmd = None
+        self._thread: Optional[threading.Thread] = None
+        self._running = False
+        self._lock = threading.Lock()
+        self._latest_frame: Optional[np.ndarray] = None
+        self._has_frame = threading.Event()
 
     def open(self) -> "ScreenSource":
         import os
@@ -112,9 +118,14 @@ class ScreenSource(VideoSource):
                 cmd.extend(["-g", "768,0 768x864"])
             elif sub == "left":
                 cmd.extend(["-g", "0,0 768x864"])
-            cmd.extend(["-t", "jpeg", "-q", "70", "-"])
+            # PPM is an uncompressed pixmap dump — 3x-4x faster than CPU JPEG encoding in grim
+            cmd.extend(["-t", "ppm", "-"])
             self._grim_cmd = cmd
             log.info("Opened Wayland screen capture using grim (%s)", " ".join(cmd))
+            self._running = True
+            self._thread = threading.Thread(target=self._capture_worker, daemon=True, name="ScreenSourceGrabber")
+            self._thread.start()
+            self._has_frame.wait(timeout=2.0)
             return self
 
         import mss
@@ -133,37 +144,55 @@ class ScreenSource(VideoSource):
                  monitor_idx, self._mon["width"], self._mon["height"])
         return self
 
+    def _capture_worker(self) -> None:
+        import subprocess
+        import cv2
+
+        while self._running:
+            p = subprocess.run(self._grim_cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+            if not p.stdout:
+                continue
+            frame = cv2.imdecode(np.frombuffer(p.stdout, np.uint8), cv2.IMREAD_COLOR)
+            if frame is None:
+                continue
+            if self.width and self.height and (frame.shape[1] != self.width or frame.shape[0] != self.height):
+                frame = cv2.resize(frame, (self.width, self.height), interpolation=cv2.INTER_AREA)
+            with self._lock:
+                self._latest_frame = frame
+            self._has_frame.set()
+
     def read(self) -> Optional[np.ndarray]:
         import cv2
 
         if self._is_wayland:
-            import subprocess
-
-            p = subprocess.run(self._grim_cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
-            if not p.stdout:
+            if not self._has_frame.wait(timeout=1.0):
                 return None
-            frame = cv2.imdecode(np.frombuffer(p.stdout, np.uint8), cv2.IMREAD_COLOR)
-            if frame is None:
-                return None
-        else:
-            if self._sct is None:
-                raise RuntimeError("Source not opened; call open() first.")
-            sct_img = self._sct.grab(self._mon)
-            frame = np.ascontiguousarray(np.array(sct_img)[:, :, :3])
+            with self._lock:
+                return self._latest_frame.copy() if self._latest_frame is not None else None
 
+        if self._sct is None:
+            raise RuntimeError("Source not opened; call open() first.")
+        sct_img = self._sct.grab(self._mon)
+        frame = np.ascontiguousarray(np.array(sct_img)[:, :, :3])
         if self.width and self.height and (frame.shape[1] != self.width or frame.shape[0] != self.height):
             frame = cv2.resize(frame, (self.width, self.height), interpolation=cv2.INTER_AREA)
         return frame
 
     def release(self) -> None:
+        self._running = False
+        if self._thread is not None and self._thread.is_alive():
+            self._thread.join(timeout=1.0)
+            self._thread = None
         if self._sct is not None:
             self._sct.close()
             self._sct = None
         self._grim_cmd = None
+        with self._lock:
+            self._latest_frame = None
 
     @property
     def is_open(self) -> bool:
-        return self._grim_cmd is not None or self._sct is not None
+        return (self._is_wayland and self._running) or (self._sct is not None)
 
 
 class DroneSource(VideoSource):

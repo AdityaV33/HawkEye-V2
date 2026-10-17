@@ -87,6 +87,7 @@ class WeaponDetector:
         log.info("Loading weapon model %s on %s", self.model_path, self.device)
         try:
             self._model = YOLO(self.model_path)
+            self._model.to(self.device)
         except Exception as e:
             # A corrupt/incompatible checkpoint is a bad file, not a reason to
             # take down surveillance + attendance entirely. Same contract as
