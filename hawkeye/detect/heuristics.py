@@ -101,8 +101,8 @@ def is_standing(p: PersonDetection) -> bool:
 def fall_score(p: PersonDetection) -> float:
     """Single-frame fall/lying likelihood in [0, 1].
     
-    Guards strictly against non-human detections while gracefully handling
-    one-sided limb occlusion during real collapses.
+    A fall requires the legs to be parallel to the floor (lying down / collapsed),
+    not merely a bent torso.
     """
     if not is_human(p):
         return 0.0
@@ -111,27 +111,29 @@ def fall_score(p: PersonDetection) -> float:
     if is_standing(p):
         return 0.0
 
-    sh, hip = torso_points(p)
-    horiz = geometry.torso_horizontalness(sh, hip)
+    leg_horiz = geometry.leg_horizontalness(p)
     aspect = p.width / (p.height + 1e-6)          # >1 => wider than tall (lying)
     aspect_term = np.clip((aspect - 0.75) / 1.1, 0.0, 1.0)
 
-    if horiz is None:
-        # If human torso vector is fully obscured, use human-confirmed aspect ratio
-        return float(aspect_term * 0.65) if aspect >= 1.0 else 0.0
-
-    # If the person is standing tall (height > width), slight/moderate
-    # forward or lateral bending (angle < 43 deg, horiz < 0.48) is NOT a fall.
-    # Require the torso to be tilted significantly more towards horizontal or body collapsed.
-    if aspect < 0.75 and horiz < 0.48:
+    # For fall, legs must be parallel to the floor. Vertical legs reject fall.
+    if leg_horiz is not None and leg_horiz < 0.50:
         return 0.0
 
-    # For upright/standing postures that tilt heavily, scale smoothly from the 0.48 floor
-    if aspect < 0.75:
-        tilt_term = (horiz - 0.45) / 0.55
-        return float(min(1.0, 0.60 * tilt_term))
+    sh, hip = torso_points(p)
+    torso_horiz = geometry.torso_horizontalness(sh, hip)
 
-    return float(0.6 * horiz + 0.4 * aspect_term)
+    # If leg keypoints are available and parallel to the floor (>= 0.50)
+    if leg_horiz is not None:
+        t_horiz = torso_horiz if torso_horiz is not None else leg_horiz
+        return float(min(1.0, 0.55 * leg_horiz + 0.30 * t_horiz + 0.15 * aspect_term))
+
+    # If legs are completely occluded/missing, require horizontal body aspect ratio (lying flat)
+    if aspect >= 0.95:
+        t_horiz = torso_horiz if torso_horiz is not None else 0.8
+        return float(min(1.0, 0.40 * t_horiz + 0.60 * aspect_term))
+
+    # Torso alone without horizontal legs or horizontal body aspect is NOT a fall
+    return 0.0
 
 
 def analyze(persons: List[PersonDetection], motion_score: float) -> List[Candidate]:

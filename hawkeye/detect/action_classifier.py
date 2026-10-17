@@ -214,10 +214,12 @@ class ActionClassifier:
                         continue
                     if heuristics.is_standing(p):
                         continue
-                    sh, hip = heuristics.torso_points(p)
-                    horiz = geometry.torso_horizontalness(sh, hip)
+                    leg_horiz = geometry.leg_horizontalness(p)
+                    # For fall, legs must be parallel to floor (not vertical/standing)
+                    if leg_horiz is not None and leg_horiz < 0.50:
+                        continue
                     aspect = p.width / (p.height + 1e-6)
-                    if (horiz is not None and horiz >= 0.48) or aspect >= 0.95:
+                    if (leg_horiz is not None and leg_horiz >= 0.50) or aspect >= 0.95:
                         has_fallen_human = True
                         break
                 if not has_fallen_human:

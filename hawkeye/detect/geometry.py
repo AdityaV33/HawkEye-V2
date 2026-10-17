@@ -18,7 +18,8 @@ from typing import Optional
 
 import numpy as np
 
-from .pose import L_HIP, L_SHOULDER, L_WRIST, R_HIP, R_SHOULDER, R_WRIST, PersonDetection
+from .pose import (L_ANKLE, L_HIP, L_KNEE, L_SHOULDER, L_WRIST,
+                   R_ANKLE, R_HIP, R_KNEE, R_SHOULDER, R_WRIST, PersonDetection)
 
 
 def mid(a, b):
@@ -61,6 +62,41 @@ def torso_horizontalness(sh, hip) -> Optional[float]:
         return None
     angle_from_vertical = abs(math.degrees(math.atan2(abs(v[0]), abs(v[1]) + 1e-6)))
     return min(1.0, angle_from_vertical / 90.0)
+
+
+def leg_horizontalness(p: PersonDetection) -> Optional[float]:
+    """0 = vertical/standing legs (perpendicular to floor), 1 = lying flat (parallel to floor).
+
+    Evaluates the hip->ankle (and hip->knee) leg axes against the floor plane.
+    Returns None if no confident leg keypoints are available.
+    """
+    angles = []
+    for hip_idx, knee_idx, ankle_idx in ((L_HIP, L_KNEE, L_ANKLE), (R_HIP, R_KNEE, R_ANKLE)):
+        hip = p.kp(hip_idx, min_conf=0.20)
+        knee = p.kp(knee_idx, min_conf=0.20)
+        ankle = p.kp(ankle_idx, min_conf=0.20)
+
+        # Ignore uninitialized (0, 0) coordinates
+        if hip is not None and np.linalg.norm(hip) < 1.0:
+            hip = None
+        if knee is not None and np.linalg.norm(knee) < 1.0:
+            knee = None
+        if ankle is not None and np.linalg.norm(ankle) < 1.0:
+            ankle = None
+
+        seg_angles = []
+        for a, b in ((hip, ankle), (hip, knee), (knee, ankle)):
+            if a is not None and b is not None:
+                v = b - a
+                if np.linalg.norm(v) > 1e-3:
+                    deg = abs(math.degrees(math.atan2(abs(v[0]), abs(v[1]) + 1e-6)))
+                    seg_angles.append(min(1.0, deg / 90.0))
+        if seg_angles:
+            angles.append(seg_angles[0])
+
+    if not angles:
+        return None
+    return float(np.mean(angles))
 
 
 def aggressive_pose(p: PersonDetection) -> float:
