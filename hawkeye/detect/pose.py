@@ -85,6 +85,9 @@ class PoseDetector:
         self.model_path = model_path
         self.device = resolve_device(device)
         self.conf = conf
+        # Run YOLO inference with a lower floor (0.22) to catch distant people,
+        # then strictly verify human anatomical structure in _parse.
+        self.predict_conf = min(0.22, conf)
         self._model = None
 
     def load(self) -> "PoseDetector":
@@ -94,9 +97,8 @@ class PoseDetector:
         self._model = YOLO(self.model_path)
         return self
 
-    @staticmethod
-    def _parse(r) -> List[PersonDetection]:
-        """Turn one ultralytics Result into PersonDetections."""
+    def _parse(self, r) -> List[PersonDetection]:
+        """Turn one ultralytics Result into PersonDetections with distant human verification."""
         out: List[PersonDetection] = []
         if r is None or r.keypoints is None or r.boxes is None:
             return out
@@ -104,14 +106,54 @@ class PoseDetector:
         confs = r.boxes.conf.cpu().numpy()
         kpts = r.keypoints.data.cpu().numpy()   # (N, 17, 3)
         for i in range(len(boxes)):
-            out.append(PersonDetection(box=boxes[i], conf=float(confs[i]), keypoints=kpts[i]))
+            box = boxes[i]
+            cf = float(confs[i])
+            kp = kpts[i]
+
+            # Detections that clear the primary threshold are accepted directly
+            if cf >= self.conf:
+                out.append(PersonDetection(box=box, conf=cf, keypoints=kp))
+                continue
+
+            # For lower-confidence / distant people (predict_conf <= cf < self.conf):
+            # Strictly verify human anatomical structure so background noise/furniture is rejected.
+            valid_kpts = kp[kp[:, 2] >= 0.18]
+            if len(valid_kpts) < 3:
+                continue
+
+            bw = max(1.0, box[2] - box[0])
+            bh = max(1.0, box[3] - box[1])
+
+            # Check vertical keypoint hierarchy (head above hips/feet for upright distant humans)
+            head_kpts = kp[0:5, :][kp[0:5, 2] >= 0.18]
+            lower_kpts = kp[11:17, :][kp[11:17, 2] >= 0.18]
+
+            is_valid_human = False
+            if len(head_kpts) > 0 and len(lower_kpts) > 0:
+                head_y = float(np.mean(head_kpts[:, 1]))
+                lower_y = float(np.mean(lower_kpts[:, 1]))
+                if head_y < lower_y:
+                    is_valid_human = True
+            elif bh / bw >= 1.25 and len(valid_kpts) >= 4:
+                # Vertical body aspect with multiple consistent keypoints
+                is_valid_human = True
+            elif bw / bh >= 1.2:
+                # Distant horizontal person (e.g. fallen)
+                has_sh = bool(kp[5, 2] >= 0.18 or kp[6, 2] >= 0.18)
+                has_hip = bool(kp[11, 2] >= 0.18 or kp[12, 2] >= 0.18)
+                if has_sh and has_hip:
+                    is_valid_human = True
+
+            if is_valid_human:
+                out.append(PersonDetection(box=box, conf=cf, keypoints=kp))
+
         return out
 
     def detect(self, frame: np.ndarray) -> List[PersonDetection]:
         if self._model is None:
             self.load()
         results = self._model.predict(
-            frame, conf=self.conf, device=self.device, verbose=False
+            frame, conf=self.predict_conf, device=self.device, verbose=False
         )
         return self._parse(results[0]) if results else []
 
@@ -133,7 +175,7 @@ class PoseDetector:
         if self._model is None:
             self.load()
         results = self._model.predict(
-            frames, conf=self.conf, device=self.device, verbose=False
+            frames, conf=self.predict_conf, device=self.device, verbose=False
         )
         out = [self._parse(r) for r in (results or [])]
         # predict() returns one Result per input; pad rather than lose alignment
