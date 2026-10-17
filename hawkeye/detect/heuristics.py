@@ -64,6 +64,40 @@ def torso_points(p: PersonDetection):
     return sh, hip
 
 
+def is_standing(p: PersonDetection) -> bool:
+    """True if person has vertically supporting legs (standing on feet).
+    
+    A standing person whose torso is bent (e.g. tying shoes, leaning, stretching)
+    is standing and has not fallen.
+    """
+    lh = p.kp(L_HIP, min_conf=0.20)
+    rh = p.kp(R_HIP, min_conf=0.20)
+    lk = p.kp(13, min_conf=0.20)
+    rk = p.kp(14, min_conf=0.20)
+    la = p.kp(15, min_conf=0.20)
+    ra = p.kp(16, min_conf=0.20)
+
+    hip_y = min([pt[1] for pt in (lh, rh) if pt is not None], default=None)
+    knee_y = max([pt[1] for pt in (lk, rk) if pt is not None], default=None)
+    ankle_y = max([pt[1] for pt in (la, ra) if pt is not None], default=None)
+
+    aspect = p.width / (p.height + 1e-6)
+
+    # If ankles and hips detected, check if legs extend vertically downward
+    if hip_y is not None and ankle_y is not None:
+        vert_leg_span = (ankle_y - hip_y) / (p.height + 1e-6)
+        if vert_leg_span >= 0.35 and aspect < 0.85:
+            return True
+
+    # If knees and hips detected (e.g. lower legs occluded)
+    if hip_y is not None and knee_y is not None:
+        vert_thigh_span = (knee_y - hip_y) / (p.height + 1e-6)
+        if vert_thigh_span >= 0.20 and aspect < 0.75:
+            return True
+
+    return False
+
+
 def fall_score(p: PersonDetection) -> float:
     """Single-frame fall/lying likelihood in [0, 1].
     
@@ -71,6 +105,10 @@ def fall_score(p: PersonDetection) -> float:
     one-sided limb occlusion during real collapses.
     """
     if not is_human(p):
+        return 0.0
+
+    # A standing person on their feet (even with bent torso) is not a fall
+    if is_standing(p):
         return 0.0
 
     sh, hip = torso_points(p)

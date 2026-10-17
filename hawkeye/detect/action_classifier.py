@@ -212,6 +212,8 @@ class ActionClassifier:
                 for p in persons:
                     if not heuristics.is_human(p):
                         continue
+                    if heuristics.is_standing(p):
+                        continue
                     sh, hip = heuristics.torso_points(p)
                     horiz = geometry.torso_horizontalness(sh, hip)
                     aspect = p.width / (p.height + 1e-6)
