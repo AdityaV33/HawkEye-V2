@@ -11,11 +11,18 @@ ingest:
 detect:
   device: "auto"       # auto -> mps on Mac, cuda on the 3050, else cpu
   pose_model: "yolo11n-pose.pt"    # auto-downloaded by ultralytics on first run
+  person_conf: 0.35
   # Trained YOLO for guns/knives (see docs/training.md). Empty = disabled.
   # No weights ship with the repo — train your own with scripts/train_weapon.py
   # and point this at the result, e.g. "models/weapons.pt".
   weapon_model: "models/weapons.pt"
-  weapon_conf: 0.40
+  weapon_conf: 0.55
+  # Reject oversized bounding boxes taking more than 15% of frame (cars, walls, fans)
+  weapon_max_area_ratio: 0.15
+  # Suppress floating weapons when no person is holding or standing near the object
+  weapon_require_person: true
+  # Require weapon detection across N consecutive ticks before triggering
+  weapon_hysteresis_hits: 2
   # Class-label filter for weapon detections. Empty => use the built-in keyword
   # list in detect/weapons.py (guns AND knives), matched on token boundaries.
   # Narrow this ONLY after reading the per-class mAP50 of your own trained model
@@ -41,11 +48,10 @@ detect:
   # lower it if genuine short events (a single hard shove) are being missed.
   action_hysteresis_window: 3
   action_hysteresis_hits: 2
-  person_conf: 0.35
-  trigger_threshold: 0.50           # lowered from 0.60 — triggers Stage B reasoning more readily
+  trigger_threshold: 0.58           # raised from 0.50 — prevents low-confidence noise from flooding incidents
   motion_weight: 0.35               # how much scene-motion contributes to the fused score
   clip_seconds: 3.0                 # length of evidence/reasoning clip buffer
-  cooldown_seconds: 10.0            # min gap between triggers for the same anomaly type
+  cooldown_seconds: 30.0            # min gap (seconds) between triggers for the same anomaly type (stops duplicate clutter)
 
 reason:
   backend: "auto"      # auto | claude | moondream | mock  (auto: claude if key else mock)

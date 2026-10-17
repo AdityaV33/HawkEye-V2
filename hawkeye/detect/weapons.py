@@ -96,7 +96,7 @@ class WeaponDetector:
             self.enabled = False
         return self
 
-    def detect(self, frame: np.ndarray) -> List[WeaponDetection]:
+    def detect(self, frame: np.ndarray, max_area_ratio: float = 0.15) -> List[WeaponDetection]:
         if not self.enabled:
             return []
         if self._model is None:
@@ -107,10 +107,17 @@ class WeaponDetector:
             return out
         r = results[0]
         names = r.names
+        frame_area = float(frame.shape[0] * frame.shape[1]) if len(frame.shape) >= 2 else 0.0
         for box, cls, cf in zip(r.boxes.xyxy.cpu().numpy(),
                                 r.boxes.cls.cpu().numpy(),
                                 r.boxes.conf.cpu().numpy()):
+            box_w = max(0.0, float(box[2] - box[0]))
+            box_h = max(0.0, float(box[3] - box[1]))
+            # Reject oversized detections taking > max_area_ratio of screen (e.g. cars, vans, fans)
+            if frame_area > 0 and (box_w * box_h) / frame_area > max_area_ratio:
+                continue
             label = str(names.get(int(cls), int(cls))).lower()
             if self._matches(label):
                 out.append(WeaponDetection(box=box, conf=float(cf), label=label))
         return out
+

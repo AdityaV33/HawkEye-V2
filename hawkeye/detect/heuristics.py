@@ -18,15 +18,70 @@ from .pose import (L_HIP, L_SHOULDER, R_HIP, R_SHOULDER, PersonDetection)
 Candidate = Tuple[AnomalyType, float, str]
 
 
+def is_human(p: PersonDetection) -> bool:
+    """Verify that a detection has human anatomical structure (not background clutter)."""
+    # Count keypoints with confidence >= 0.20
+    kpts_conf = sum(1 for kp in p.keypoints if kp[2] >= 0.20)
+    if kpts_conf < 3:
+        return False
+    # Must have at least one upper-body point (head/shoulders/arms: indices 0-10)
+    # and at least one lower-body point (hips/knees/ankles: indices 11-16)
+    has_upper = any(p.kp(i, min_conf=0.20) is not None for i in range(11))
+    has_lower = any(p.kp(i, min_conf=0.20) is not None for i in range(11, 17))
+    return has_upper and has_lower
+
+
+def torso_points(p: PersonDetection):
+    """Get shoulder and hip points, gracefully handling single-sided occlusion when a person is down."""
+    # Shoulders
+    ls = p.kp(L_SHOULDER, min_conf=0.20)
+    rs = p.kp(R_SHOULDER, min_conf=0.20)
+    if ls is not None and rs is not None:
+        sh = (ls + rs) / 2.0
+    elif ls is not None:
+        sh = ls
+    elif rs is not None:
+        sh = rs
+    else:
+        # Fallback to nose if shoulders are occluded
+        sh = p.kp(0, min_conf=0.20)
+
+    # Hips
+    lh = p.kp(L_HIP, min_conf=0.20)
+    rh = p.kp(R_HIP, min_conf=0.20)
+    if lh is not None and rh is not None:
+        hip = (lh + rh) / 2.0
+    elif lh is not None:
+        hip = lh
+    elif rh is not None:
+        hip = rh
+    else:
+        # Fallback to knees if hips are occluded
+        lk = p.kp(13, min_conf=0.20)
+        rk = p.kp(14, min_conf=0.20)
+        hip = (lk + rk) / 2.0 if (lk is not None and rk is not None) else (lk if lk is not None else rk)
+
+    return sh, hip
+
+
 def fall_score(p: PersonDetection) -> float:
-    """Single-frame fall/lying likelihood in [0, 1]."""
-    aspect = p.width / (p.height + 1e-6)          # >1 => wider than tall (lying)
-    aspect_term = np.clip((aspect - 0.8) / 1.2, 0.0, 1.0)
-    sh = geometry.mid(p.kp(L_SHOULDER), p.kp(R_SHOULDER))
-    hip = geometry.mid(p.kp(L_HIP), p.kp(R_HIP))
+    """Single-frame fall/lying likelihood in [0, 1].
+    
+    Guards strictly against non-human detections while gracefully handling
+    one-sided limb occlusion during real collapses.
+    """
+    if not is_human(p):
+        return 0.0
+
+    sh, hip = torso_points(p)
     horiz = geometry.torso_horizontalness(sh, hip)
+    aspect = p.width / (p.height + 1e-6)          # >1 => wider than tall (lying)
+    aspect_term = np.clip((aspect - 0.75) / 1.1, 0.0, 1.0)
+
     if horiz is None:
-        return float(aspect_term * 0.7)           # geometry only
+        # If human torso vector is fully obscured, use human-confirmed aspect ratio
+        return float(aspect_term * 0.65) if aspect >= 1.0 else 0.0
+
     return float(0.6 * horiz + 0.4 * aspect_term)
 
 

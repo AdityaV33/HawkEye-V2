@@ -39,7 +39,7 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 
 from ..events.schema import AnomalyType
-from . import geometry
+from . import geometry, heuristics
 from .pose import L_HIP, L_SHOULDER, R_HIP, R_SHOULDER
 from .skeleton_features import (build_sequence, frame_feature, resample,
                                 standardize)
@@ -204,15 +204,21 @@ class ActionClassifier:
                 if motion < self.violence_motion_min and not aggressive:
                     continue
             elif atype == AnomalyType.FALL:
-                # A fall needs a body that is actually down: near-horizontal torso
-                # or a wide (lying) bounding box.
-                if persons:
-                    dom = max(persons, key=lambda p: p.width * p.height)
-                    sh = geometry.mid(dom.kp(L_SHOULDER), dom.kp(R_SHOULDER))
-                    hip = geometry.mid(dom.kp(L_HIP), dom.kp(R_HIP))
-                    horiz = geometry.torso_horizontalness(sh, hip)
-                    aspect = dom.width / (dom.height + 1e-6)
-                    if horiz is not None and horiz < 0.35 and aspect < 0.8:
+                # A fall can ONLY apply to humans: reject if no persons are in the scene
+                if not persons:
+                    continue
+                # Reject non-human clutter / upright humans: require verified keypoints and horizontal torso
+                has_fallen_human = False
+                for p in persons:
+                    if not heuristics.is_human(p):
                         continue
+                    sh, hip = heuristics.torso_points(p)
+                    horiz = geometry.torso_horizontalness(sh, hip)
+                    aspect = p.width / (p.height + 1e-6)
+                    if (horiz is not None and horiz >= 0.28) or aspect >= 0.95:
+                        has_fallen_human = True
+                        break
+                if not has_fallen_human:
+                    continue
             out.append((atype, conf, reason))
         return out

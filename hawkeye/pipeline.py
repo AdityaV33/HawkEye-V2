@@ -65,6 +65,8 @@ class Pipeline:
         self._retention_t: Optional[threading.Thread] = None
         self._fps = 0.0
         self._NUM_WORKERS = 2
+        self._last_logged_incident: Dict[str, float] = {}
+        self._incident_dedup_lock = threading.Lock()
 
     # --- lifecycle ---
     def start(self) -> None:
@@ -226,6 +228,18 @@ class Pipeline:
             log.info("Stage B dismissed a %s trigger (false alarm avoided).",
                      event.anomaly_type.value)
             return
+
+        # Debounce duplicate incident cards: if an incident of the same type
+        # was logged within cooldown_seconds, don't spam a brand new card.
+        now = time.time()
+        atype_key = reasoning.anomaly_type.value
+        with self._incident_dedup_lock:
+            last_ts = self._last_logged_incident.get(atype_key, -9999.0)
+            if now - last_ts < self.cfg.detect.cooldown_seconds:
+                log.info("Debounced duplicate %s incident (within %.1fs window) — feed clutter avoided.",
+                         atype_key, self.cfg.detect.cooldown_seconds)
+                return
+            self._last_logged_incident[atype_key] = now
 
         # Identify the perpetrator on the most recent clip frame.
         face_match: Optional[FaceMatch] = None

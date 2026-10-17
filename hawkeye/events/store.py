@@ -77,7 +77,22 @@ class IncidentStore:
             self._conn.execute("DELETE FROM incidents WHERE ts < ?", (cutoff_ts,))
         return ids
 
+    def delete(self, incident_id: str) -> bool:
+        """Delete a single incident by ID."""
+        with self._lock, self._conn:
+            cursor = self._conn.execute("DELETE FROM incidents WHERE id=?", (incident_id,))
+            return cursor.rowcount > 0
+
+    def clear_all(self) -> List[str]:
+        """Delete all incidents. Returns all IDs so evidence files can be purged."""
+        with self._lock, self._conn:
+            rows = self._conn.execute("SELECT id FROM incidents").fetchall()
+            ids = [r["id"] for r in rows]
+            self._conn.execute("DELETE FROM incidents")
+        return ids
+
     def close(self) -> None:
+
         """Release the SQLite connection (call on pipeline shutdown)."""
         with self._lock:
             self._conn.close()

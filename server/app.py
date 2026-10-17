@@ -143,6 +143,36 @@ async def set_incident_status(incident_id: str, status: str = Form(...)):
     return {"ok": True}
 
 
+@app.delete("/api/incidents")
+async def clear_incidents():
+    """Clear all logged incidents and their evidence thumbnails/crops."""
+    import shutil
+
+    ids = app.state.pipeline.store.clear_all()
+    ev_root = Path(app.state.cfg.storage.evidence_dir)
+    if ev_root.exists():
+        for iid in ids:
+            idir = ev_root / iid
+            if idir.exists() and idir.is_dir():
+                shutil.rmtree(idir, ignore_errors=True)
+    return {"ok": True, "deleted": len(ids)}
+
+
+@app.delete("/api/incidents/{incident_id}")
+async def delete_single_incident(incident_id: str):
+    """Delete a single incident and its evidence."""
+    import shutil
+
+    ok = app.state.pipeline.store.delete(incident_id)
+    if not ok:
+        raise HTTPException(404, "Incident not found")
+    idir = Path(app.state.cfg.storage.evidence_dir) / incident_id
+    if idir.exists() and idir.is_dir():
+        shutil.rmtree(idir, ignore_errors=True)
+    return {"ok": True}
+
+
+
 @app.get("/api/incidents.csv")
 async def incidents_csv(limit: int = 1000):
     import csv
