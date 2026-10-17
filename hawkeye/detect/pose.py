@@ -153,9 +153,15 @@ class PoseDetector:
         if r is None or r.keypoints is None or r.boxes is None:
             return out
         boxes = r.boxes.xyxy.cpu().numpy()
+        classes = r.boxes.cls.cpu().numpy()
         confs = r.boxes.conf.cpu().numpy()
         kpts = r.keypoints.data.cpu().numpy()   # (N, 17, 3)
         for i in range(len(boxes)):
+            # YOLO pose checkpoints may still return non-person detections
+            # when fed broad/custom inputs. COCO class 0 is person; reject
+            # every other class before anatomical heuristics run.
+            if int(classes[i]) != 0:
+                continue
             box = boxes[i]
             cf = float(confs[i])
             kp = kpts[i]

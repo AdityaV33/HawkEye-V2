@@ -12,17 +12,26 @@ detect:
   device: "auto"       # auto -> mps on Mac, cuda on the 3050, else cpu
   pose_model: "yolo11n-pose.pt"    # auto-downloaded by ultralytics on first run
   person_conf: 0.35
-  # Trained YOLO for guns/knives (see docs/training.md). Empty = disabled.
-  # No weights ship with the repo — train your own with scripts/train_weapon.py
-  # and point this at the result, e.g. "models/weapons.pt".
+  # Trained YOLO for guns/knives (see docs/training.md). The bundled checkpoint
+  # is one-class, so use a conservative floor plus handheld/temporal gating.
   weapon_model: "models/weapons.pt"
-  weapon_conf: 0.17
+  # The bundled checkpoint scores stylized knives around 0.40; keep this
+  # proposal floor below that and rely on temporal/handheld gating afterward.
+  weapon_conf: 0.35
+  # Held-object alerts use a stricter floor so ropes, phones, and tools near a
+  # person's hands are not promoted from low-confidence proposals.
+  weapon_held_conf: 0.60
+  # Allow clearly identified standalone weapons; lower-confidence detections
+  # still require a verified person/hand relationship.
+  # Standalone alerts are high precision only; weak object-like matches must
+  # not be promoted without a visible holder.
+  weapon_standalone_conf: 0.75
   # Reject oversized bounding boxes taking more than 15% of frame (cars, walls, fans)
   weapon_max_area_ratio: 0.15
   # Suppress floating weapons when no person is holding or standing near the object
   weapon_require_person: true
   # Require weapon detection across N consecutive ticks before triggering
-  weapon_hysteresis_hits: 1
+  weapon_hysteresis_hits: 3
   # Class-label filter for weapon detections. Empty => use the built-in keyword
   # list in detect/weapons.py (guns AND knives), matched on token boundaries.
   # Narrow this ONLY after reading the per-class mAP50 of your own trained model
@@ -36,12 +45,19 @@ detect:
   # Fallback confidence floor only. A trained checkpoint carries per-class
   # thresholds fitted on validation data at a target precision, and those win.
   action_min_conf: 0.50                  # lowered from 0.60 — fallback floor for classes without a checkpoint threshold
+  # Slightly more sensitive than the checkpoint's conservative fall threshold;
+  # physical posture guards still reject upright people.
+  fall_action_min_conf: 0.60
+  # Transitional falls can have incomplete leg keypoints and score below the
+  # general anomaly floor; their separate geometry/motion guards remain active.
+  fall_trigger_threshold: 0.44
   # Suppress VIOLENCE when 2+ people are close/overlapping but scene motion is
   # below this and nobody has an aggressive (wrists-raised) pose -- fixes the
   # "two calm people standing near the camera" false-positive. Same 0-1 scale
   # as scene motion energy; raise if still too trigger-happy, lower if real
   # fights with little visible motion get missed.
-  violence_motion_min: 0.08              # lowered from 0.12 — catches calmer violence (grappling, choking)
+  violence_motion_min: 0.18              # precision mode: suppresses calm proximity/screen-content noise
+  violence_trigger_threshold: 0.65       # heuristic fallback floor for police-worthy violence
   action_stride: 2
   # A class must clear its threshold on `hits` of the last `window` inference
   # ticks before it is reported. Raise `hits` if you still see brief flickers;

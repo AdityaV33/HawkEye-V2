@@ -13,7 +13,8 @@ import numpy as np
 
 from ..events.schema import AnomalyType
 from . import geometry
-from .pose import (L_HIP, L_SHOULDER, R_HIP, R_SHOULDER, PersonDetection)
+from .pose import (L_HIP, L_SHOULDER, R_HIP, R_SHOULDER, NOSE,
+                   PersonDetection)
 
 Candidate = Tuple[AnomalyType, float, str]
 
@@ -28,7 +29,32 @@ def is_human(p: PersonDetection) -> bool:
     # and at least one lower-body point (hips/knees/ankles: indices 11-16)
     has_upper = any(p.kp(i, min_conf=0.20) is not None for i in range(11))
     has_lower = any(p.kp(i, min_conf=0.20) is not None for i in range(11, 17))
-    return has_upper and (has_lower or kpts_conf >= 5)
+    if not (has_upper and (has_lower or kpts_conf >= 5)):
+        return False
+
+    # A pose model can hallucinate a person on a dog or other elongated
+    # object. Require a human-like head/torso anchor and bilateral torso
+    # structure when those keypoints are available.
+    head = p.kp(NOSE, min_conf=0.20)
+    shoulders = [p.kp(i, min_conf=0.20) for i in (L_SHOULDER, R_SHOULDER)]
+    hips = [p.kp(i, min_conf=0.20) for i in (L_HIP, R_HIP)]
+    shoulder_pair = [pt for pt in shoulders if pt is not None]
+    hip_pair = [pt for pt in hips if pt is not None]
+    if head is None and len(shoulder_pair) < 2:
+        return False
+    if len(shoulder_pair) == 0 or len(hip_pair) == 0:
+        return False
+
+    shoulder_y = float(np.mean([pt[1] for pt in shoulder_pair]))
+    hip_y = float(np.mean([pt[1] for pt in hip_pair]))
+    # For upright people, torso anchors have a clear top-to-bottom order.
+    # Horizontal fallen people are exempt because their axis is rotated.
+    if p.height >= p.width and (
+        head is not None and head[1] > shoulder_y + 0.12 * p.height
+        or shoulder_y > hip_y + 0.08 * p.height
+    ):
+        return False
+    return True
 
 
 def torso_points(p: PersonDetection):
@@ -115,20 +141,29 @@ def fall_score(p: PersonDetection) -> float:
     aspect = p.width / (p.height + 1e-6)          # >1 => wider than tall (lying)
     aspect_term = np.clip((aspect - 0.75) / 1.1, 0.0, 1.0)
 
-    # For fall, legs must be parallel to the floor. Vertical legs reject fall.
-    if leg_horiz is not None and leg_horiz < 0.50:
+    # During the brief collapse transition, pose estimation often keeps one
+    # leg partly vertical even though the person is no longer standing. Keep
+    # the strict floor-parallel requirement for static scenes, while allowing
+    # the temporal/action path to use this weaker geometry during motion.
+    if leg_horiz is not None and leg_horiz < 0.35:
         return 0.0
 
     sh, hip = torso_points(p)
     torso_horiz = geometry.torso_horizontalness(sh, hip)
+
+    # An upright torso (sitting upright or standing straight) is not a fall
+    if torso_horiz is not None and torso_horiz < 0.30:
+        return 0.0
 
     # If leg keypoints are available and parallel to the floor (>= 0.50)
     if leg_horiz is not None:
         t_horiz = torso_horiz if torso_horiz is not None else leg_horiz
         return float(min(1.0, 0.55 * leg_horiz + 0.30 * t_horiz + 0.15 * aspect_term))
 
-    # If legs are completely occluded/missing, require horizontal body aspect ratio (lying flat)
-    if aspect >= 0.95:
+    # A cropped portrait or seated upper body often has no leg keypoints and
+    # can be slightly wider than tall. Do not call that a fall; without leg
+    # geometry, require a clearly horizontal full-body-shaped box.
+    if aspect >= 1.25:
         t_horiz = torso_horiz if torso_horiz is not None else 0.8
         return float(min(1.0, 0.40 * t_horiz + 0.60 * aspect_term))
 
@@ -136,7 +171,9 @@ def fall_score(p: PersonDetection) -> float:
     return 0.0
 
 
-def analyze(persons: List[PersonDetection], motion_score: float) -> List[Candidate]:
+def analyze(persons: List[PersonDetection], motion_score: float,
+            violence_threshold: float = 0.65,
+            violence_motion_min: float = 0.18) -> List[Candidate]:
     """Return anomaly candidates from the current frame's poses + scene motion."""
     out: List[Candidate] = []
 
@@ -146,7 +183,11 @@ def analyze(persons: List[PersonDetection], motion_score: float) -> List[Candida
         s = fall_score(p)
         if s > best_fall:
             best_fall, fall_person = s, p
-    if best_fall >= 0.55 and fall_person is not None:
+    # A moving transition can score below the static lying threshold because
+    # the keypoint skeleton is still rotating. It is accepted only with
+    # meaningful scene motion and still requires the non-standing geometry
+    # checks in fall_score().
+    if best_fall >= 0.52 or (best_fall >= 0.39 and motion_score >= 0.15):
         # A collapse with little scene motion => likely medical (person down, not moving).
         reason = "person in a horizontal/collapsed posture"
         out.append((AnomalyType.FALL, float(min(1.0, best_fall)), reason))
@@ -164,7 +205,10 @@ def analyze(persons: List[PersonDetection], motion_score: float) -> List[Candida
         closeness = max(best_prox, best_iou)
         violence = closeness * (0.35 + 0.65 * motion_score) + 0.15 * aggro
         violence = float(np.clip(violence, 0.0, 1.0))
-        if violence >= 0.45:
+        # Precision guard: close people in a thumbnail or calm conversation
+        # can have high proximity but are not a police-worthy assault.
+        if violence >= violence_threshold and (
+                motion_score >= violence_motion_min or aggro >= 0.5):
             out.append((
                 AnomalyType.VIOLENCE, violence,
                 "two or more people in close contact with rapid motion",

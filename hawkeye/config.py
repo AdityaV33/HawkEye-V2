@@ -25,13 +25,21 @@ class DetectConfig(BaseModel):
     device: str = "auto"
     pose_model: str = "yolo11n-pose.pt"
     weapon_model: str = ""            # path to a trained weapon-detection YOLO
-    weapon_conf: float = 0.17
+    # The bundled one-class checkpoint needs a conservative confidence floor;
+    # low thresholds turn arbitrary screen regions into "Weapon" detections.
+    weapon_conf: float = 0.35
+    # Hand proximity is not enough to trust a one-class weapon checkpoint;
+    # held-object alerts need a higher confidence floor.
+    weapon_held_conf: float = 0.60
+    # A very high-confidence weapon can be flagged without a visible holder
+    # (for example, a knife lying alone in the camera view).
+    weapon_standalone_conf: float = 0.75
     # Reject oversized bounding boxes taking more than this fraction of the frame (cars, walls, fans)
     weapon_max_area_ratio: float = 0.15
     # Reject floating weapon detections if no person is holding or standing near the object
     weapon_require_person: bool = True
     # Require weapon detection across N consecutive ticks to eliminate 1-frame noise
-    weapon_hysteresis_hits: int = 1
+    weapon_hysteresis_hits: int = 3
     # Class-label substrings that count as a weapon. Empty => use the built-in
     # default list (see detect/weapons.py WEAPON_KEYWORDS).
     weapon_labels: List[str] = Field(default_factory=list)
@@ -39,6 +47,10 @@ class DetectConfig(BaseModel):
     # Fallback confidence floor. A trained checkpoint carries per-class
     # thresholds fitted at a target precision, which take precedence over this.
     action_min_conf: float = 0.5
+    fall_action_min_conf: float = 0.6
+    # Transitional falls have a lower floor because pose keypoints can be
+    # incomplete while the person is still rotating toward the ground.
+    fall_trigger_threshold: float = 0.44
     action_stride: int = 2           # run the action net every N frames (perf)
     # Temporal hysteresis: a class must clear its threshold on `hits` of the last
     # `window` inference ticks before it is emitted. One window crossing a
@@ -48,7 +60,10 @@ class DetectConfig(BaseModel):
     # Suppress a VIOLENCE verdict when 2+ people are close/overlapping but
     # neither scene motion nor an aggressive pose backs it up (e.g. two people
     # standing still near the camera) -- see hawkeye/detect/action_classifier.py.
-    violence_motion_min: float = 0.12
+    violence_motion_min: float = 0.18
+    # Heuristic violence requires stronger interaction evidence than the
+    # trained model because screen content can create large motion spikes.
+    violence_trigger_threshold: float = 0.65
     person_conf: float = 0.35
     trigger_threshold: float = 0.55
     motion_weight: float = 0.35

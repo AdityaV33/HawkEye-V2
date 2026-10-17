@@ -378,6 +378,7 @@ def test_hysteresis_suppresses_single_tick():
     bent_person.keypoints[R_SHOULDER][0] += 80
     bent_person.keypoints[L_SHOULDER][1] = bent_person.keypoints[L_HIP][1]
     bent_person.keypoints[R_SHOULDER][1] = bent_person.keypoints[R_HIP][1]
+    from hawkeye.detect import heuristics
     from hawkeye.detect.heuristics import fall_score
     assert fall_score(bent_person) == 0.0, "fall_score flagged a standing person with bent torso"
     kept = clf._apply_guards([(AnomalyType.FALL, 0.99, "x")], [bent_person], 0.1)
@@ -387,7 +388,45 @@ def test_hysteresis_suppresses_single_tick():
     assert fall_score(down[0]) > 0.85, f"fallen person got low fall_score: {fall_score(down[0])}"
     kept = clf._apply_guards([(AnomalyType.FALL, 0.99, "x")], down, 0.1)
     assert len(kept) == 1, "fall suppressed on a horizontal person"
+    # A partial upper-body portrait in a screen thumbnail must not become a
+    # fall just because its crop is mildly wider than tall.
+    portrait = make_person(300, 300, h=150, w=140)
+    portrait.keypoints[13:, 2] = 0.0
+    assert fall_score(portrait) == 0.0, "upper-body portrait was scored as a fall"
+    kept = clf._apply_guards([(AnomalyType.FALL, 0.99, "x")], [portrait], 0.8)
+    assert kept == [], "upper-body portrait survived the fall guard"
+    partial = make_person(300, 300, h=175, w=213)
+    partial.keypoints[12:, 2] = 0.0
+    kept = clf._apply_guards([(AnomalyType.FALL, 0.99, "x")], [partial], 0.8)
+    assert kept == [], "partial cooking-style crop survived the fall guard"
+    object_like = make_person(300, 300)
+    object_like.keypoints[:, 2] = 0.0
+    assert fall_score(object_like) == 0.0, "object-like pose was scored as a fall"
+    kept = clf._apply_guards([(AnomalyType.FALL, 0.99, "x")], [object_like], 0.8)
+    assert kept == [], "object-like pose survived the human-only fall guard"
+    dog_like = make_person(300, 300, h=90, w=180)
+    dog_like.keypoints[NOSE, 2] = 0.0
+    dog_like.keypoints[L_SHOULDER, 2] = 0.0
+    dog_like.keypoints[R_SHOULDER, 2] = 0.0
+    assert not heuristics.is_human(dog_like), "dog-like pose passed human validation"
     print("  ✓ physical guards accept real events and reject impossible ones")
+
+
+def test_heuristic_violence_precision_gate():
+    from hawkeye.detect.heuristics import analyze
+    from hawkeye.events.schema import AnomalyType
+
+    people = [make_person(300, 300, arms_up=True),
+              make_person(370, 300, arms_up=True)]
+    calm = analyze(people, 0.05)
+    assert not any(c[0] == AnomalyType.VIOLENCE for c in calm), (
+        "low-motion close interaction was flagged as violence"
+    )
+    kinetic = analyze(people, 0.8)
+    assert any(c[0] == AnomalyType.VIOLENCE for c in kinetic), (
+        "strongly kinetic interaction was suppressed"
+    )
+    print("  ✓ heuristic violence precision gate")
 
 
 def test_weapon_detector_degrades_on_missing_file():
@@ -428,7 +467,8 @@ def test_weapon_hand_held_filtering():
     from hawkeye.detect.stage_a import StageA
     from hawkeye.detect.weapons import WeaponDetection
 
-    stage_a = StageA(DetectConfig(weapon_require_person=True))
+    stage_a = StageA(DetectConfig(weapon_require_person=True,
+                                 weapon_standalone_conf=0.90))
 
     p = make_person(300, 300)
     # 1. Weapon held in right hand (wrist is at cx+30, cy+h*0.1 = 330, 320)
@@ -442,6 +482,26 @@ def test_weapon_hand_held_filtering():
 
     kept = stage_a._filter_weapons([w_held, w_chest, w_feet, w_float], [p])
     assert len(kept) == 1 and kept[0] is w_held, f"unexpected weapon filtering: {kept}"
+    w_standalone = WeaponDetection(
+        box=np.array([20, 20, 500, 250], dtype=np.float32),
+        conf=0.95, label="knife",
+    )
+    kept = stage_a._filter_weapons([w_standalone], [])
+    assert kept == [w_standalone], "high-confidence standalone weapon was rejected"
+    weak_standalone = WeaponDetection(
+        box=np.array([20, 20, 500, 250], dtype=np.float32),
+        conf=0.60, label="knife",
+    )
+    assert stage_a._filter_weapons([weak_standalone], []) == [], (
+        "weak standalone object-like detection was promoted"
+    )
+    w_rope_like = WeaponDetection(
+        box=np.array([320, 305, 350, 335], dtype=np.float32),
+        conf=0.50, label="weapon",
+    )
+    assert stage_a._filter_weapons([w_rope_like], [p]) == [], (
+        "low-confidence held object was promoted as a weapon"
+    )
     print("  ✓ weapon gating requires hand-held grasp and rejects chest/feet/floating boxes")
 
 
@@ -512,6 +572,7 @@ def main() -> int:
         test_model_forward_and_calibration,
         test_threshold_selection,
         test_hysteresis_suppresses_single_tick,
+        test_heuristic_violence_precision_gate,
         test_weapon_detector_degrades_on_missing_file,
         test_weapon_label_matching,
         test_weapon_hand_held_filtering,

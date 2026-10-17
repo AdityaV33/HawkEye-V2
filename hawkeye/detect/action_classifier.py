@@ -73,6 +73,7 @@ class ActionClassifier:
         self.model_path = model_path
         self.device_pref = device
         self.min_conf = min_conf          # floor; per-class thresholds take precedence
+        self.fall_min_conf = min_conf
         self.infer_stride = max(1, infer_stride)
         self.violence_motion_min = violence_motion_min
         self.hysteresis_window = max(1, hysteresis_window)
@@ -151,7 +152,14 @@ class ActionClassifier:
 
     # --- internals ---
     def _threshold_for(self, label: str) -> float:
-        return float(self._thresholds.get(label, self.min_conf))
+        default = self.fall_min_conf if label.strip().lower() == "fall" else self.min_conf
+        checkpoint_threshold = self._thresholds.get(label)
+        if checkpoint_threshold is None:
+            return float(default)
+        # Permit a deployment-specific sensitivity override for falls while
+        # retaining the checkpoint calibration for every other class.
+        return float(min(checkpoint_threshold, default) if label.strip().lower() == "fall"
+                     else checkpoint_threshold)
 
     def _infer(self) -> List[Candidate]:
         import torch
@@ -215,11 +223,29 @@ class ActionClassifier:
                     if heuristics.is_standing(p):
                         continue
                     leg_horiz = geometry.leg_horizontalness(p)
-                    # For fall, legs must be parallel to floor (not vertical/standing)
-                    if leg_horiz is not None and leg_horiz < 0.50:
+                    # During a moving collapse one leg can remain partly
+                    # vertical in the pose estimate; do not reject that
+                    # transition unless the scene is also static.
+                    if (leg_horiz is not None and leg_horiz < 0.30
+                            and motion < 0.15):
+                        continue
+                    sh, hip = heuristics.torso_points(p)
+                    torso_horiz = geometry.torso_horizontalness(sh, hip)
+                    # An upright torso (sitting or standing straight) is not a fall
+                    if torso_horiz is not None and torso_horiz < 0.30:
                         continue
                     aspect = p.width / (p.height + 1e-6)
-                    if (leg_horiz is not None and leg_horiz >= 0.50) or aspect >= 0.95:
+                    lower_count = sum(
+                        1 for idx in range(11, 17)
+                        if p.kp(idx, min_conf=0.20) is not None
+                    )
+                    # Without leg geometry, a mildly wide upper-body crop is
+                    # not enough evidence of a fall; require a clear
+                    # horizontal full-body-shaped box.
+                    if leg_horiz is None and (lower_count < 2 or aspect < 1.25):
+                        continue
+                    if ((leg_horiz is not None and leg_horiz >= 0.30)
+                            or aspect >= 1.25):
                         has_fallen_human = True
                         break
                 if not has_fallen_human:

@@ -86,6 +86,11 @@ Or use the **People** tab in the app. (Local, consented dataset only — no Aadh
 
 Everything is in `configs/default.yaml` — trigger threshold, clip length, cooldowns, reasoner backend, identity match threshold, action/weapon model paths, and the anomaly→action dispatch rules. Override with `--config myconfig.yaml`.
 
+The checked-in `models/weapons.pt` file is an experimental one-class checkpoint.
+Weapon detection remains enabled with a conservative confidence floor and
+handheld/temporal gating, but it should eventually be retrained with hard-negative
+examples (phones, fans, bicycles, and similar objects).
+
 ## Train / retrain the detection models
 
 Stage A's action classifier (violence/fall) and weapon detector are trained models, not hardcoded rules — see [`docs/training.md`](docs/training.md) for the full guide (primary target: Apple Silicon/MPS). Quick path once datasets are staged:

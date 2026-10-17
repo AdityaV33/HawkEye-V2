@@ -39,11 +39,14 @@ class StageA:
         self.motion = MotionAnomaly()
         self.weapons = WeaponDetector(cfg.weapon_model, cfg.device, cfg.weapon_conf,
                                       cfg.weapon_labels or WEAPON_KEYWORDS)
+        self.weapon_held_conf = cfg.weapon_held_conf
+        self.weapon_standalone_conf = cfg.weapon_standalone_conf
         self.action = ActionClassifier(cfg.action_model, cfg.device,
                                        cfg.action_min_conf, cfg.action_stride,
                                        cfg.violence_motion_min,
                                        cfg.action_hysteresis_window,
                                        cfg.action_hysteresis_hits)
+        self.action.fall_min_conf = cfg.fall_action_min_conf
         self._last_trigger: Dict[str, float] = {}
         self._weapon_streak: int = 0
 
@@ -71,11 +74,18 @@ class StageA:
             return []
         if not self.cfg.weapon_require_person:
             return weapon_dets
+        standalone = [wd for wd in weapon_dets
+                      if wd.conf >= self.weapon_standalone_conf]
         if not persons:
-            return []
+            return standalone
 
         valid: List[WeaponDetection] = []
         for wd in weapon_dets:
+            if wd.conf >= self.weapon_standalone_conf:
+                valid.append(wd)
+                continue
+            if wd.conf < self.weapon_held_conf:
+                continue
             wx1, wy1, wx2, wy2 = wd.box
             w_w = max(1.0, wx2 - wx1)
             w_h = max(1.0, wy2 - wy1)
@@ -146,19 +156,42 @@ class StageA:
     # --- core ---
     def process(self, frame: np.ndarray, frame_id: int, ts: float
                 ) -> Tuple[StageAEvent, np.ndarray, List[PersonDetection]]:
-        persons = self.pose.detect(frame)
+        # Keep the invariant explicit at the orchestration boundary: only
+        # anatomically verified humans may reach fall/action/weapon gating.
+        persons = [p for p in self.pose.detect(frame) if heuristics.is_human(p)]
         motion = self.motion.update(frame)
         h, w = frame.shape[:2]
 
-        # Trained action classifier takes precedence over the bootstrap
-        # heuristics once weights are configured (see docs/training.md).
+        # Use the trained action classifier when available, but always retain
+        # the geometric fall guard. A sequence model can call a horizontal
+        # person "normal" or "violence"; a verified horizontal human is still
+        # the stronger physical signal for a fall.
+        heuristic_candidates = heuristics.analyze(
+            persons, motion,
+            violence_threshold=self.cfg.violence_trigger_threshold,
+            violence_motion_min=self.cfg.violence_motion_min,
+        )
         if self.action.available:
-            candidates = self.action.update(persons, motion, w, h)
+            model_candidates = self.action.update(persons, motion, w, h)
+            heuristic_falls = [c for c in heuristic_candidates
+                               if c[0] == AnomalyType.FALL]
+            model_falls = [c for c in model_candidates
+                           if c[0] == AnomalyType.FALL]
+            if heuristic_falls and not model_falls:
+                candidates = heuristic_falls + [
+                    c for c in model_candidates if c[0] != AnomalyType.VIOLENCE
+                ]
+            else:
+                candidates = model_candidates or heuristic_candidates
         else:
-            candidates = heuristics.analyze(persons, motion)
+            candidates = heuristic_candidates
 
         # Detect weapons with oversized-box rejection (cars, ceiling fans, walls)
-        raw_weapons = self.weapons.detect(frame, max_area_ratio=self.cfg.weapon_max_area_ratio)
+        raw_weapons = self.weapons.detect(
+            frame,
+            max_area_ratio=self.cfg.weapon_max_area_ratio,
+            standalone_conf=self.weapon_standalone_conf,
+        )
         weapon_dets = self._filter_weapons(raw_weapons, persons)
 
         # Temporal hysteresis: require weapon across consecutive frames to reject 1-frame blips
@@ -170,13 +203,16 @@ class StageA:
         if weapon_dets and self._weapon_streak >= self.cfg.weapon_hysteresis_hits:
             top = max(wd.conf for wd in weapon_dets)
             # A verified handheld weapon is an immediate high-priority alert.
-            # Scale score so it reliably meets trigger_threshold while retaining top confidence.
-            weapon_score = max(self.cfg.trigger_threshold, float(top))
+            # Scale score so it reliably meets trigger_threshold and gives critical severity.
+            weapon_score = max(0.85, float(top))
             candidates.append((AnomalyType.WEAPON, weapon_score,
                                f"weapon detected ({weapon_dets[0].label}: {top:.0%})"))
 
-        # Fuse: highest-scoring candidate wins; motion floor keeps a baseline.
-        if candidates:
+        # Fuse: WEAPON takes top priority if present; otherwise highest-scoring candidate wins.
+        weapon_cands = [c for c in candidates if c[0] == AnomalyType.WEAPON]
+        if weapon_cands:
+            atype, cscore, reason = weapon_cands[0]
+        elif candidates:
             atype, cscore, reason = max(candidates, key=lambda c: c[1])
         else:
             atype, cscore, reason = AnomalyType.NORMAL, 0.0, ""
@@ -184,18 +220,27 @@ class StageA:
 
         triggered = self._maybe_trigger(atype, score, ts)
 
+        all_boxes = [BBox(x1=float(p.box[0]), y1=float(p.box[1]),
+                          x2=float(p.box[2]), y2=float(p.box[3])) for p in persons]
+        if atype == AnomalyType.WEAPON and weapon_dets:
+            for w in weapon_dets:
+                all_boxes.append(BBox(x1=float(w.box[0]), y1=float(w.box[1]),
+                                      x2=float(w.box[2]), y2=float(w.box[3])))
+
         event = StageAEvent(
             frame_id=frame_id, ts=ts, anomaly_type=atype, score=score,
             motion_score=float(motion), person_count=len(persons),
-            boxes=[BBox(x1=float(p.box[0]), y1=float(p.box[1]),
-                        x2=float(p.box[2]), y2=float(p.box[3])) for p in persons],
+            boxes=all_boxes,
             triggered=triggered, reason=reason,
         )
         annotated = self._draw(frame, persons, weapon_dets, event)
         return event, annotated, persons
 
     def _maybe_trigger(self, atype: AnomalyType, score: float, ts: float) -> bool:
-        if atype == AnomalyType.NORMAL or score < self.cfg.trigger_threshold:
+        threshold = self.cfg.trigger_threshold
+        if atype == AnomalyType.FALL:
+            threshold = min(threshold, self.cfg.fall_trigger_threshold)
+        if atype == AnomalyType.NORMAL or score < threshold:
             return False
         last = self._last_trigger.get(atype.value, -9999.0)
         if ts - last < self.cfg.cooldown_seconds:
@@ -216,13 +261,29 @@ class StageA:
 
         best_fall_p = max(persons, key=heuristics.fall_score) if persons else None
         scene_fall = (event.anomaly_type == AnomalyType.FALL and (alert or event.score >= 0.35))
+        scene_weapon = (event.anomaly_type == AnomalyType.WEAPON or bool(weapon_dets))
 
         for p in persons:
             x1, y1, x2, y2 = map(int, p.box)
             f_score = heuristics.fall_score(p)
             is_fall = (f_score >= 0.38) or (scene_fall and p is best_fall_p and f_score >= 0.25)
 
-            if is_fall:
+            # Check if this person is holding a detected weapon
+            is_holding_weapon = False
+            if weapon_dets:
+                p_scale = max(x2 - x1, y2 - y1)
+                for w in weapon_dets:
+                    w_box = w.box
+                    dx = max(0, max(w_box[0] - x2, x1 - w_box[2]))
+                    dy = max(0, max(w_box[1] - y2, y1 - w_box[3]))
+                    if float(np.hypot(dx, dy)) <= 0.35 * p_scale:
+                        is_holding_weapon = True
+                        break
+
+            if is_holding_weapon or (alert and scene_weapon):
+                person_color = RED
+                person_label = "WEAPON"
+            elif is_fall:
                 person_color = ORANGE
                 pct = int(max(f_score, event.score if scene_fall else 0.0) * 100)
                 person_label = f"FALL {pct}%" if pct > 0 else "FALLING"
@@ -294,7 +355,9 @@ class StageA:
         h, w = img.shape[:2]
         cv2.rectangle(img, (0, 0), (w, 40), (25, 25, 25), -1)
         label = event.anomaly_type.value.upper()
-        if event.anomaly_type == AnomalyType.FALL and (event.triggered or event.score >= 0.35):
+        if event.anomaly_type == AnomalyType.WEAPON:
+            color = RED
+        elif event.anomaly_type == AnomalyType.FALL and (event.triggered or event.score >= 0.35):
             color = ORANGE
         elif event.triggered:
             color = RED
