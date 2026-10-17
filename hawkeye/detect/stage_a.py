@@ -13,9 +13,10 @@ from ..config import DetectConfig
 from ..events.schema import AnomalyType, BBox, StageAEvent
 from . import geometry, heuristics
 from .action_classifier import ActionClassifier
-from .pose import (ARM_EDGES, FACE_EDGES, L_ANKLE, L_HIP, L_SHOULDER,
-                   L_WRIST, LEG_EDGES, R_ANKLE, R_HIP, R_SHOULDER, R_WRIST,
-                   TORSO_EDGES, PersonDetection, PoseDetector)
+from .pose import (ARM_EDGES, FACE_EDGES, L_ANKLE, L_ELBOW, L_HIP,
+                   L_SHOULDER, L_WRIST, LEG_EDGES, R_ANKLE, R_ELBOW, R_HIP,
+                   R_SHOULDER, R_WRIST, TORSO_EDGES, PersonDetection,
+                   PoseDetector)
 from .scene_anomaly import MotionAnomaly
 from .weapons import WEAPON_KEYWORDS, WeaponDetector
 
@@ -63,8 +64,8 @@ class StageA:
                         persons: List[PersonDetection]) -> List[WeaponDetection]:
         """Spatial gating: a brandished weapon must be actively held by a verified person.
 
-        Strictly enforces that the weapon is in or immediately touching a human hand/wrist.
-        Rejects background clutter, shoes/socks on feet, and chest/t-shirt designs.
+        Strictly enforces that the weapon is in or immediately touching a human hand/wrist/arm.
+        Rejects background clutter, shoes/socks on feet, and floating detections.
         """
         if not weapon_dets:
             return []
@@ -76,7 +77,6 @@ class StageA:
         valid: List[WeaponDetection] = []
         for wd in weapon_dets:
             wx1, wy1, wx2, wy2 = wd.box
-            wcx, wcy = (wx1 + wx2) / 2.0, (wy1 + wy2) / 2.0
             w_w = max(1.0, wx2 - wx1)
             w_h = max(1.0, wy2 - wy1)
             w_area = w_w * w_h
@@ -91,52 +91,50 @@ class StageA:
                 ph = max(1.0, py2 - py1)
                 p_scale = max(pw, ph)
 
-                # Size sanity: handheld weapon is between 0.2% and 30% of the person's area
-                p_area = max(1.0, pw * ph)
-                if (w_area / p_area) > 0.30 or (w_area / p_area) < 0.002:
-                    continue
-
                 def dist_to_box(pt: np.ndarray) -> float:
                     dx = max(0.0, max(wx1 - pt[0], pt[0] - wx2))
                     dy = max(0.0, max(wy1 - pt[1], pt[1] - wy2))
                     return float(np.hypot(dx, dy))
 
-                # Check wrist proximity (must be held in or immediately adjacent to hand)
-                wrist_pts = [p.kp(idx, min_conf=0.20) for idx in (L_WRIST, R_WRIST)]
+                # Check wrist proximity (or elbow fallback if wrist is occluded by weapon)
+                wrist_pts = [p.kp(idx, min_conf=0.10) for idx in (L_WRIST, R_WRIST)]
                 wrist_dists = [dist_to_box(pt) for pt in wrist_pts if pt is not None]
 
-                if not wrist_dists:
+                elbow_pts = [p.kp(idx, min_conf=0.10) for idx in (L_ELBOW, R_ELBOW)]
+                elbow_dists = [dist_to_box(pt) for pt in elbow_pts if pt is not None]
+
+                min_arm_dist = min(wrist_dists) if wrist_dists else (min(elbow_dists) * 0.85 if elbow_dists else None)
+
+                if min_arm_dist is None:
                     continue
 
-                min_wrist_dist = min(wrist_dists)
-                grasp_limit = 0.14 * p_scale   # Hand grasp reach radius
+                grasp_limit = 0.28 * p_scale   # Hand grasp reach radius
 
-                if min_wrist_dist > grasp_limit:
+                if min_arm_dist > grasp_limit:
+                    continue
+
+                # Size sanity: handheld weapon area relative to person area.
+                # Allow higher ratio (up to 2.5x) for long guns / rifles or half-body people
+                # when the weapon is directly touching or inside the wrist grasp.
+                p_area = max(1.0, pw * ph)
+                max_ratio = 2.5 if min_arm_dist <= 0.05 * p_scale else 0.85
+                if (w_area / p_area) > max_ratio:
                     continue
 
                 # Exclude feet / shoes (reject white socks/shoes detected as knife/gun)
                 ankle_pts = [p.kp(idx, min_conf=0.20) for idx in (L_ANKLE, R_ANKLE)]
                 ankle_dists = [dist_to_box(pt) for pt in ankle_pts if pt is not None]
-                if ankle_dists and min(ankle_dists) < min_wrist_dist:
+                if ankle_dists and min(ankle_dists) < min_arm_dist * 0.7:
                     continue
 
-                # Exclude chest / t-shirt graphic: if wrist is not inside the box,
-                # check if weapon is centered on the sternum between shoulders and hips
-                wrist_inside = any(wx1 <= pt[0] <= wx2 and wy1 <= pt[1] <= wy2
-                                   for pt in wrist_pts if pt is not None)
-                if not wrist_inside:
-                    ls = p.kp(L_SHOULDER, min_conf=0.20)
-                    rs = p.kp(R_SHOULDER, min_conf=0.20)
-                    lh = p.kp(L_HIP, min_conf=0.20)
-                    rh = p.kp(R_HIP, min_conf=0.20)
-                    if (ls is not None or rs is not None) and (lh is not None or rh is not None):
-                        sh_y = min(pt[1] for pt in (ls, rs) if pt is not None)
-                        hip_y = max(pt[1] for pt in (lh, rh) if pt is not None)
-                        chest_cx = (px1 + px2) / 2.0
-                        chest_cy = (sh_y + hip_y) / 2.0
-                        d_chest = float(np.hypot(wcx - chest_cx, wcy - chest_cy))
-                        if d_chest < min_wrist_dist:
-                            continue
+                # Exclude chest t-shirt print: if hands are hanging down at/below hips,
+                # an object entirely above hips on the chest is not held in hand
+                lh, rh = p.kp(L_HIP, min_conf=0.20), p.kp(R_HIP, min_conf=0.20)
+                hip_y = min([pt[1] for pt in (lh, rh) if pt is not None], default=None)
+                valid_wrists = [pt for pt in wrist_pts if pt is not None]
+                if hip_y is not None and valid_wrists and all(pt[1] >= hip_y - 0.05 * ph for pt in valid_wrists):
+                    if wy2 < hip_y:
+                        continue
 
                 held_by_someone = True
                 break
@@ -171,14 +169,11 @@ class StageA:
 
         if weapon_dets and self._weapon_streak >= self.cfg.weapon_hysteresis_hits:
             top = max(wd.conf for wd in weapon_dets)
-            candidates.append((AnomalyType.WEAPON, float(top),
+            # A verified handheld weapon is an immediate high-priority alert.
+            # Scale score so it reliably meets trigger_threshold while retaining top confidence.
+            weapon_score = max(self.cfg.trigger_threshold, float(top))
+            candidates.append((AnomalyType.WEAPON, weapon_score,
                                f"weapon detected ({weapon_dets[0].label}: {top:.0%})"))
-
-        # Open-vocabulary safety net: unusual motion with people present but no
-        # specific type -> let Stage B reason about "any other bad thing".
-        if motion >= 0.6 and persons:
-            candidates.append((AnomalyType.UNKNOWN, float(self.cfg.motion_weight + 0.5 * motion),
-                               "unusual scene motion"))
 
         # Fuse: highest-scoring candidate wins; motion floor keeps a baseline.
         if candidates:

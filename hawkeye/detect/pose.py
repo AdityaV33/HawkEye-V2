@@ -107,10 +107,10 @@ def is_valid_human_detection(box: np.ndarray, kp: np.ndarray, min_kpt_conf: floa
     if (float(np.max(valid_ys)) - float(np.min(valid_ys))) < 0.25 * bh:
         return False
 
-    # Anatomical anchors: must have upper body point (head/shoulders/arms) AND lower body point (hips/legs)
+    # Anatomical anchors: must have upper body point (head/shoulders/arms) AND (lower body point (hips/legs) OR >= 5 confident keypoints for seated/half-body)
     has_upper = bool(np.any(kpts_conf[0:11]))
     has_lower = bool(np.any(kpts_conf[11:17]))
-    if not (has_upper and has_lower):
+    if not (has_upper and (has_lower or valid_count >= 5)):
         return False
 
     # For upright/standing humans (bh >= bw), head/shoulders must be higher (smaller y) than lower body

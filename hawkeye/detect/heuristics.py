@@ -28,7 +28,7 @@ def is_human(p: PersonDetection) -> bool:
     # and at least one lower-body point (hips/knees/ankles: indices 11-16)
     has_upper = any(p.kp(i, min_conf=0.20) is not None for i in range(11))
     has_lower = any(p.kp(i, min_conf=0.20) is not None for i in range(11, 17))
-    return has_upper and has_lower
+    return has_upper and (has_lower or kpts_conf >= 5)
 
 
 def torso_points(p: PersonDetection):
