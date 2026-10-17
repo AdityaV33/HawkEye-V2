@@ -25,13 +25,13 @@ class DetectConfig(BaseModel):
     device: str = "auto"
     pose_model: str = "yolo11n-pose.pt"
     weapon_model: str = ""            # path to a trained weapon-detection YOLO
-    weapon_conf: float = 0.55
+    weapon_conf: float = 0.68
     # Reject oversized bounding boxes taking more than this fraction of the frame (cars, walls, fans)
     weapon_max_area_ratio: float = 0.15
     # Reject floating weapon detections if no person is holding or standing near the object
     weapon_require_person: bool = True
     # Require weapon detection across N consecutive ticks to eliminate 1-frame noise
-    weapon_hysteresis_hits: int = 2
+    weapon_hysteresis_hits: int = 3
     # Class-label substrings that count as a weapon. Empty => use the built-in
     # default list (see detect/weapons.py WEAPON_KEYWORDS).
     weapon_labels: List[str] = Field(default_factory=list)

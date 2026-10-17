@@ -16,13 +16,13 @@ detect:
   # No weights ship with the repo — train your own with scripts/train_weapon.py
   # and point this at the result, e.g. "models/weapons.pt".
   weapon_model: "models/weapons.pt"
-  weapon_conf: 0.55
+  weapon_conf: 0.68
   # Reject oversized bounding boxes taking more than 15% of frame (cars, walls, fans)
   weapon_max_area_ratio: 0.15
   # Suppress floating weapons when no person is holding or standing near the object
   weapon_require_person: true
   # Require weapon detection across N consecutive ticks before triggering
-  weapon_hysteresis_hits: 2
+  weapon_hysteresis_hits: 3
   # Class-label filter for weapon detections. Empty => use the built-in keyword
   # list in detect/weapons.py (guns AND knives), matched on token boundaries.
   # Narrow this ONLY after reading the per-class mAP50 of your own trained model

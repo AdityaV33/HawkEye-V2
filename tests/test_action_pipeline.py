@@ -422,6 +422,29 @@ def test_weapon_label_matching():
     print(f"  ✓ weapon label matching ({len(should_match)} match, {len(should_not)} reject)")
 
 
+def test_weapon_hand_held_filtering():
+    """A weapon must be actively held in/by a person's hand, not on chest or feet."""
+    from hawkeye.config import DetectConfig
+    from hawkeye.detect.stage_a import StageA
+    from hawkeye.detect.weapons import WeaponDetection
+
+    stage_a = StageA(DetectConfig(weapon_require_person=True))
+
+    p = make_person(300, 300)
+    # 1. Weapon held in right hand (wrist is at cx+30, cy+h*0.1 = 330, 320)
+    w_held = WeaponDetection(box=np.array([320, 305, 350, 335], dtype=np.float32), conf=0.85, label="gun")
+    # 2. False detection on shirt/chest (cx=300, cy=280)
+    w_chest = WeaponDetection(box=np.array([290, 270, 310, 290], dtype=np.float32), conf=0.60, label="gun")
+    # 3. False detection on shoes/socks at ankles (300, 390)
+    w_feet = WeaponDetection(box=np.array([290, 380, 310, 400], dtype=np.float32), conf=0.60, label="gun")
+    # 4. Floating box 100px away
+    w_float = WeaponDetection(box=np.array([120, 250, 150, 280], dtype=np.float32), conf=0.75, label="gun")
+
+    kept = stage_a._filter_weapons([w_held, w_chest, w_feet, w_float], [p])
+    assert len(kept) == 1 and kept[0] is w_held, f"unexpected weapon filtering: {kept}"
+    print("  ✓ weapon gating requires hand-held grasp and rejects chest/feet/floating boxes")
+
+
 def test_checkpoint_roundtrip_through_live_wrapper():
     """Save a checkpoint, load it through ActionClassifier, run the live path.
 
@@ -491,6 +514,7 @@ def main() -> int:
         test_hysteresis_suppresses_single_tick,
         test_weapon_detector_degrades_on_missing_file,
         test_weapon_label_matching,
+        test_weapon_hand_held_filtering,
         test_checkpoint_roundtrip_through_live_wrapper,
     ]
     print(f"Running {len(checks)} pipeline self-checks...\n")
