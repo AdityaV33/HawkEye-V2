@@ -82,6 +82,17 @@ def fall_score(p: PersonDetection) -> float:
         # If human torso vector is fully obscured, use human-confirmed aspect ratio
         return float(aspect_term * 0.65) if aspect >= 1.0 else 0.0
 
+    # If the person is standing tall (height > width), slight/moderate
+    # forward or lateral bending (angle < 43 deg, horiz < 0.48) is NOT a fall.
+    # Require the torso to be tilted significantly more towards horizontal or body collapsed.
+    if aspect < 0.75 and horiz < 0.48:
+        return 0.0
+
+    # For upright/standing postures that tilt heavily, scale smoothly from the 0.48 floor
+    if aspect < 0.75:
+        tilt_term = (horiz - 0.45) / 0.55
+        return float(min(1.0, 0.60 * tilt_term))
+
     return float(0.6 * horiz + 0.4 * aspect_term)
 
 

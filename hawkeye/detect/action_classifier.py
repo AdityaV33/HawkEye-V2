@@ -215,7 +215,7 @@ class ActionClassifier:
                     sh, hip = heuristics.torso_points(p)
                     horiz = geometry.torso_horizontalness(sh, hip)
                     aspect = p.width / (p.height + 1e-6)
-                    if (horiz is not None and horiz >= 0.28) or aspect >= 0.95:
+                    if (horiz is not None and horiz >= 0.48) or aspect >= 0.95:
                         has_fallen_human = True
                         break
                 if not has_fallen_human:

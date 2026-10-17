@@ -187,7 +187,7 @@ class StageA:
         for p in persons:
             x1, y1, x2, y2 = map(int, p.box)
             f_score = heuristics.fall_score(p)
-            is_fall = (f_score >= 0.33) or (scene_fall and p is best_fall_p and f_score >= 0.18)
+            is_fall = (f_score >= 0.38) or (scene_fall and p is best_fall_p and f_score >= 0.25)
 
             if is_fall:
                 person_color = ORANGE

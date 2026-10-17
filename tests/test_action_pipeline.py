@@ -372,6 +372,14 @@ def test_hysteresis_suppresses_single_tick():
     # A fall verdict on a clearly upright person must be rejected.
     kept = clf._apply_guards([(AnomalyType.FALL, 0.99, "x")], one, 0.1)
     assert kept == [], "fall survived on an upright person"
+    # ...and rejected for a standing person bending their torso slightly (~30 deg).
+    bent_person = make_person(300, 300)
+    bent_person.keypoints[L_SHOULDER][0] += 35
+    bent_person.keypoints[R_SHOULDER][0] += 35
+    from hawkeye.detect.heuristics import fall_score
+    assert fall_score(bent_person) == 0.0, "fall_score flagged a standing person bending torso"
+    kept = clf._apply_guards([(AnomalyType.FALL, 0.99, "x")], [bent_person], 0.1)
+    assert kept == [], "fall survived on a standing person with bent torso"
     # ...and accepted for someone horizontal.
     down = [make_person(300, 400, horizontal=True)]
     kept = clf._apply_guards([(AnomalyType.FALL, 0.99, "x")], down, 0.1)
