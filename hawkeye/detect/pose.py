@@ -79,15 +79,61 @@ class PersonDetection:
         return np.array([x, y]) if c >= min_conf else None
 
 
+def is_valid_human_detection(box: np.ndarray, kp: np.ndarray, min_kpt_conf: float = 0.20) -> bool:
+    """Strictly verify that a bounding box and keypoints represent a genuine human being.
+    
+    Rejects inanimate clutter, furniture, background textures, and noisy detections.
+    """
+    bw = max(1.0, float(box[2] - box[0]))
+    bh = max(1.0, float(box[3] - box[1]))
+    aspect = bw / bh
+
+    # Reject extreme sliver boxes (e.g. door jambs, wall edges, long horizontal rails)
+    if aspect > 3.2 or aspect < 0.18:
+        return False
+
+    # Require minimum pixel size (a human must occupy at least 10x18 pixels)
+    if bw < 10 or bh < 18:
+        return False
+
+    # Require at least 4 keypoints with confidence >= min_kpt_conf
+    kpts_conf = kp[:, 2] >= min_kpt_conf
+    valid_count = int(np.sum(kpts_conf))
+    if valid_count < 4:
+        return False
+
+    # Keypoint vertical spread: keypoints must span at least 25% of the bbox height
+    valid_ys = kp[kpts_conf, 1]
+    if (float(np.max(valid_ys)) - float(np.min(valid_ys))) < 0.25 * bh:
+        return False
+
+    # Anatomical anchors: must have upper body point (head/shoulders/arms) AND lower body point (hips/legs)
+    has_upper = bool(np.any(kpts_conf[0:11]))
+    has_lower = bool(np.any(kpts_conf[11:17]))
+    if not (has_upper and has_lower):
+        return False
+
+    # For upright/standing humans (bh >= bw), head/shoulders must be higher (smaller y) than lower body
+    if bh >= bw:
+        upper_ys = kp[kpts_conf & np.array([i < 11 for i in range(17)]), 1]
+        lower_ys = kp[kpts_conf & np.array([i >= 11 for i in range(17)]), 1]
+        if len(upper_ys) > 0 and len(lower_ys) > 0:
+            if float(np.mean(upper_ys)) > float(np.mean(lower_ys)) + 0.10 * bh:
+                # Inverted anatomy: upper body is lower than hips/feet!
+                return False
+
+    return True
+
+
 class PoseDetector:
     def __init__(self, model_path: str = "yolo11n-pose.pt", device: str = "auto",
                  conf: float = 0.35):
         self.model_path = model_path
         self.device = resolve_device(device)
         self.conf = conf
-        # Run YOLO inference with a lower floor (0.22) to catch distant people,
-        # then strictly verify human anatomical structure in _parse.
-        self.predict_conf = min(0.22, conf)
+        # Run YOLO inference with a calibrated floor (0.28) to catch distant people,
+        # then strictly verify human anatomical structure on all candidates.
+        self.predict_conf = min(0.28, conf)
         self._model = None
 
     def load(self) -> "PoseDetector":
@@ -98,7 +144,7 @@ class PoseDetector:
         return self
 
     def _parse(self, r) -> List[PersonDetection]:
-        """Turn one ultralytics Result into PersonDetections with distant human verification."""
+        """Turn one ultralytics Result into PersonDetections, strictly filtering for genuine humans."""
         out: List[PersonDetection] = []
         if r is None or r.keypoints is None or r.boxes is None:
             return out
@@ -110,41 +156,9 @@ class PoseDetector:
             cf = float(confs[i])
             kp = kpts[i]
 
-            # Detections that clear the primary threshold are accepted directly
-            if cf >= self.conf:
-                out.append(PersonDetection(box=box, conf=cf, keypoints=kp))
-                continue
-
-            # For lower-confidence / distant people (predict_conf <= cf < self.conf):
-            # Strictly verify human anatomical structure so background noise/furniture is rejected.
-            valid_kpts = kp[kp[:, 2] >= 0.18]
-            if len(valid_kpts) < 3:
-                continue
-
-            bw = max(1.0, box[2] - box[0])
-            bh = max(1.0, box[3] - box[1])
-
-            # Check vertical keypoint hierarchy (head above hips/feet for upright distant humans)
-            head_kpts = kp[0:5, :][kp[0:5, 2] >= 0.18]
-            lower_kpts = kp[11:17, :][kp[11:17, 2] >= 0.18]
-
-            is_valid_human = False
-            if len(head_kpts) > 0 and len(lower_kpts) > 0:
-                head_y = float(np.mean(head_kpts[:, 1]))
-                lower_y = float(np.mean(lower_kpts[:, 1]))
-                if head_y < lower_y:
-                    is_valid_human = True
-            elif bh / bw >= 1.25 and len(valid_kpts) >= 4:
-                # Vertical body aspect with multiple consistent keypoints
-                is_valid_human = True
-            elif bw / bh >= 1.2:
-                # Distant horizontal person (e.g. fallen)
-                has_sh = bool(kp[5, 2] >= 0.18 or kp[6, 2] >= 0.18)
-                has_hip = bool(kp[11, 2] >= 0.18 or kp[12, 2] >= 0.18)
-                if has_sh and has_hip:
-                    is_valid_human = True
-
-            if is_valid_human:
+            # Require strict human anatomical structure on EVERY detection
+            # so random clutter, furniture, background textures are NEVER classified as human
+            if is_valid_human_detection(box, kp, min_kpt_conf=0.20):
                 out.append(PersonDetection(box=box, conf=cf, keypoints=kp))
 
         return out
