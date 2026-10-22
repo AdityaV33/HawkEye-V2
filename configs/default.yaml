@@ -6,7 +6,7 @@ ingest:
   source: "0"          # "0"=default webcam, a path to a video file, or an IP-cam URL (http://phone-ip:8080/video)
   width: 960
   height: 540
-  target_fps: 25       # smooth real-time processing
+  target_fps: 30       # smooth real-time processing (30 FPS standard)
 
 detect:
   device: "auto"       # auto -> mps on Mac, cuda on the 3050, else cpu

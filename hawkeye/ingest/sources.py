@@ -91,13 +91,18 @@ class ScreenSource(VideoSource):
 
     On Wayland (default on modern Linux), uses fast uncompressed `grim -t ppm`
     inside a background grabber thread, eliminating capture wait time from the
-    inference pipeline. Falls back to `mss` on X11 / Windows / macOS.
+    inference pipeline.
+    On Windows, uses DXCam (DirectX Desktop Duplication API) if available for
+    hardware-accelerated 60+ FPS capture, falling back to a dedicated background
+    MSS grabber thread with zero-copy buffer views and fast linear downsampling.
+    On X11 / macOS, uses the dedicated background MSS grabber thread.
     """
 
     def __init__(self, spec: str = "screen", width: int = 0, height: int = 0):
         super().__init__(spec, width, height, loop=False)
         self._sct = None
         self._mon = None
+        self._dxcam = None
         self._is_wayland = False
         self._grim_cmd = None
         self._thread: Optional[threading.Thread] = None
@@ -108,7 +113,15 @@ class ScreenSource(VideoSource):
 
     def open(self) -> "ScreenSource":
         import os
+        import platform
         import shutil
+
+        monitor_idx = 1
+        if ":" in self.spec:
+            try:
+                monitor_idx = int(self.spec.split(":", 1)[1])
+            except ValueError:
+                monitor_idx = 1
 
         if os.environ.get("WAYLAND_DISPLAY") and shutil.which("grim"):
             self._is_wayland = True
@@ -123,28 +136,39 @@ class ScreenSource(VideoSource):
             self._grim_cmd = cmd
             log.info("Opened Wayland screen capture using grim (%s)", " ".join(cmd))
             self._running = True
-            self._thread = threading.Thread(target=self._capture_worker, daemon=True, name="ScreenSourceGrabber")
+            self._thread = threading.Thread(target=self._capture_worker_grim, daemon=True, name="ScreenSourceGrabberGrim")
             self._thread.start()
             self._has_frame.wait(timeout=2.0)
             return self
 
+        if platform.system() == "Windows":
+            try:
+                import dxcam
+                cam = dxcam.create(device_idx=0, output_idx=max(0, monitor_idx - 1), output_color="BGR")
+                if cam is not None:
+                    cam.start(target_fps=60, video_mode=True)
+                    self._dxcam = cam
+                    self._running = True
+                    log.info("Opened Windows hardware-accelerated screen capture via DXCam (monitor %d)", monitor_idx)
+                    return self
+            except Exception as e:
+                log.info("DXCam not used (%s); falling back to optimized background MSS grabber", e)
+
         import mss
 
         self._sct = mss.MSS()
-        monitor_idx = 1
-        if ":" in self.spec:
-            try:
-                monitor_idx = int(self.spec.split(":", 1)[1])
-            except ValueError:
-                monitor_idx = 1
         if monitor_idx >= len(self._sct.monitors):
             monitor_idx = 1
         self._mon = self._sct.monitors[monitor_idx]
-        log.info("Opened X11 screen capture (monitor %d: %dx%d)",
+        log.info("Opened screen capture via threaded MSS (monitor %d: %dx%d)",
                  monitor_idx, self._mon["width"], self._mon["height"])
+        self._running = True
+        self._thread = threading.Thread(target=self._capture_worker_mss, daemon=True, name="ScreenSourceGrabberMSS")
+        self._thread.start()
+        self._has_frame.wait(timeout=2.0)
         return self
 
-    def _capture_worker(self) -> None:
+    def _capture_worker_grim(self) -> None:
         import subprocess
         import cv2
 
@@ -156,33 +180,65 @@ class ScreenSource(VideoSource):
             if frame is None:
                 continue
             if self.width and self.height and (frame.shape[1] != self.width or frame.shape[0] != self.height):
-                frame = cv2.resize(frame, (self.width, self.height), interpolation=cv2.INTER_AREA)
+                frame = cv2.resize(frame, (self.width, self.height), interpolation=cv2.INTER_LINEAR)
             with self._lock:
                 self._latest_frame = frame
             self._has_frame.set()
 
+    def _capture_worker_mss(self) -> None:
+        import cv2
+        import time
+
+        while self._running and self._sct is not None:
+            try:
+                sct_img = self._sct.grab(self._mon)
+                # Zero-copy view of raw BGRA buffer
+                raw_bgra = np.frombuffer(sct_img.raw, dtype=np.uint8).reshape((sct_img.height, sct_img.width, 4))
+                if self.width and self.height and (sct_img.width != self.width or sct_img.height != self.height):
+                    # Resize 4-channel raw buffer with fast SIMD linear interpolation
+                    resized = cv2.resize(raw_bgra, (self.width, self.height), interpolation=cv2.INTER_LINEAR)
+                    frame = cv2.cvtColor(resized, cv2.COLOR_BGRA2BGR)
+                else:
+                    frame = cv2.cvtColor(raw_bgra, cv2.COLOR_BGRA2BGR)
+
+                with self._lock:
+                    self._latest_frame = frame
+                self._has_frame.set()
+                # Yield 5ms to avoid saturating 100% of a core when capture is faster than downstream
+                time.sleep(0.005)
+            except Exception:
+                time.sleep(0.02)
+
     def read(self) -> Optional[np.ndarray]:
         import cv2
 
-        if self._is_wayland:
-            if not self._has_frame.wait(timeout=1.0):
-                return None
+        if self._dxcam is not None:
+            frame = self._dxcam.get_latest_frame()
+            if frame is None:
+                with self._lock:
+                    return self._latest_frame.copy() if self._latest_frame is not None else None
+            if self.width and self.height and (frame.shape[1] != self.width or frame.shape[0] != self.height):
+                frame = cv2.resize(frame, (self.width, self.height), interpolation=cv2.INTER_LINEAR)
             with self._lock:
-                return self._latest_frame.copy() if self._latest_frame is not None else None
+                self._latest_frame = frame
+            return frame.copy()
 
-        if self._sct is None:
-            raise RuntimeError("Source not opened; call open() first.")
-        sct_img = self._sct.grab(self._mon)
-        frame = np.ascontiguousarray(np.array(sct_img)[:, :, :3])
-        if self.width and self.height and (frame.shape[1] != self.width or frame.shape[0] != self.height):
-            frame = cv2.resize(frame, (self.width, self.height), interpolation=cv2.INTER_AREA)
-        return frame
+        if not self._has_frame.wait(timeout=1.0):
+            return None
+        with self._lock:
+            return self._latest_frame.copy() if self._latest_frame is not None else None
 
     def release(self) -> None:
         self._running = False
         if self._thread is not None and self._thread.is_alive():
             self._thread.join(timeout=1.0)
             self._thread = None
+        if self._dxcam is not None:
+            try:
+                self._dxcam.stop()
+            except Exception:
+                pass
+            self._dxcam = None
         if self._sct is not None:
             self._sct.close()
             self._sct = None
@@ -192,7 +248,7 @@ class ScreenSource(VideoSource):
 
     @property
     def is_open(self) -> bool:
-        return (self._is_wayland and self._running) or (self._sct is not None)
+        return (self._is_wayland and self._running) or (self._dxcam is not None) or (self._sct is not None and self._running)
 
 
 class DroneSource(VideoSource):

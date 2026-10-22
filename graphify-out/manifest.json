@@ -276,9 +276,9 @@
     "semantic_hash": ""
   },
   "hawkeye/config.py": {
-    "mtime": 1792048536.0,
-    "seen": 1792088029.4877338,
-    "ast_hash": "c8406345340a015df32c66f5308cb7af",
+    "mtime": 1792599231.6887774,
+    "seen": 1792599248.1788347,
+    "ast_hash": "c39a8bc0893cea53ac083a87b24cd00c",
     "semantic_hash": ""
   },
   "hawkeye/decision/__init__.py": {
@@ -306,9 +306,9 @@
     "semantic_hash": ""
   },
   "hawkeye/detect/action_classifier.py": {
-    "mtime": 1792048536.0,
-    "seen": 1792088029.4877338,
-    "ast_hash": "90082ffa3eb248e1cb3c75bb24483071",
+    "mtime": 1792599231.689978,
+    "seen": 1792599248.1788347,
+    "ast_hash": "ed61f524e6f4226d2991e72022fd486c",
     "semantic_hash": ""
   },
   "hawkeye/detect/action_model.py": {
@@ -318,21 +318,21 @@
     "semantic_hash": ""
   },
   "hawkeye/detect/geometry.py": {
-    "mtime": 1792048536.0,
-    "seen": 1792088029.4877338,
-    "ast_hash": "3564690c3cb3ec32ebc5351c646332f5",
+    "mtime": 1792599231.689978,
+    "seen": 1792599248.1788347,
+    "ast_hash": "43b1e1a4826cbbad9e739d95a6f66f85",
     "semantic_hash": ""
   },
   "hawkeye/detect/heuristics.py": {
-    "mtime": 1792048536.0,
-    "seen": 1792088029.4877338,
-    "ast_hash": "b9d4e56549e87ef24461025d52587d84",
+    "mtime": 1792599231.689978,
+    "seen": 1792599248.1788347,
+    "ast_hash": "02669ad0fe0e460decd3e65aa3ad2e43",
     "semantic_hash": ""
   },
   "hawkeye/detect/pose.py": {
-    "mtime": 1792048536.0,
-    "seen": 1792088029.4877338,
-    "ast_hash": "686189bf873b59a6c176e72b11aedb53",
+    "mtime": 1792599231.6909823,
+    "seen": 1792599248.1788347,
+    "ast_hash": "3fcab9315068b482058ac75ac148895a",
     "semantic_hash": ""
   },
   "hawkeye/detect/scene_anomaly.py": {
@@ -348,15 +348,15 @@
     "semantic_hash": ""
   },
   "hawkeye/detect/stage_a.py": {
-    "mtime": 1792048536.0,
-    "seen": 1792088029.4877338,
-    "ast_hash": "0784e22592799b75439e22fddb9b75b1",
+    "mtime": 1792599231.6909823,
+    "seen": 1792599248.1788347,
+    "ast_hash": "5f22c475a4e3c42edcc93a03e9a745b7",
     "semantic_hash": ""
   },
   "hawkeye/detect/weapons.py": {
-    "mtime": 1792048536.0,
-    "seen": 1792088029.4877338,
-    "ast_hash": "35cf990b360ed6f16538c542d5e9952b",
+    "mtime": 1792599231.6919897,
+    "seen": 1792599248.1788347,
+    "ast_hash": "2f966d7da94b90b914250b760bd71675",
     "semantic_hash": ""
   },
   "hawkeye/events/__init__.py": {
@@ -378,9 +378,9 @@
     "semantic_hash": ""
   },
   "hawkeye/events/store.py": {
-    "mtime": 1792048536.0,
-    "seen": 1792088029.4877338,
-    "ast_hash": "a94e46d56b97177baea59b34ba772308",
+    "mtime": 1792599231.6919897,
+    "seen": 1792599248.1788347,
+    "ast_hash": "b14a55e4622b78fee82103ce5dbbb1cc",
     "semantic_hash": ""
   },
   "hawkeye/hub.py": {
@@ -420,15 +420,15 @@
     "semantic_hash": ""
   },
   "hawkeye/ingest/sources.py": {
-    "mtime": 1792082161.7386441,
-    "seen": 1792088029.4877338,
-    "ast_hash": "2713cd9cb7fac10a232b527db58a0b91",
+    "mtime": 1792604669.6253252,
+    "seen": 1792604731.1558008,
+    "ast_hash": "8313417ae79ea9733db767fd59aa0a35",
     "semantic_hash": ""
   },
   "hawkeye/pipeline.py": {
-    "mtime": 1792084967.4831142,
-    "seen": 1792088029.4877338,
-    "ast_hash": "076c5baadfd2214d23966e0c41ff52b9",
+    "mtime": 1792599231.6919897,
+    "seen": 1792599248.1788347,
+    "ast_hash": "7a75ee5c16437a9e965c4dfe6ca7514b",
     "semantic_hash": ""
   },
   "hawkeye/reason/__init__.py": {
@@ -486,8 +486,8 @@
     "semantic_hash": ""
   },
   "hawkeye/train/device_profile.py": {
-    "mtime": 1792048536.0,
-    "seen": 1792088029.4877338,
+    "mtime": 1792145951.1919584,
+    "seen": 1792599248.1788347,
     "ast_hash": "740b7ba9335f6994f2039023b47535fe",
     "semantic_hash": ""
   },
@@ -534,9 +534,9 @@
     "semantic_hash": ""
   },
   "scripts/train_weapon.py": {
-    "mtime": 1792048536.0,
-    "seen": 1792088029.4877338,
-    "ast_hash": "572ea6f9420ff358f7f7ba676175d1fa",
+    "mtime": 1792613787.3975098,
+    "seen": 1792613908.9689171,
+    "ast_hash": "3ce4247eab58bdfbe2d4e445d15c7a79",
     "semantic_hash": ""
   },
   "scripts/validate_clips.py": {
@@ -552,15 +552,15 @@
     "semantic_hash": ""
   },
   "server/app.py": {
-    "mtime": 1792081975.8579733,
-    "seen": 1792088029.4877338,
-    "ast_hash": "a915f40c490ad3c1067fd05d2e150a11",
+    "mtime": 1792599231.6929817,
+    "seen": 1792599248.1788347,
+    "ast_hash": "d468c2826e4a02346fe945125e108df3",
     "semantic_hash": ""
   },
   "tests/test_action_pipeline.py": {
-    "mtime": 1792048536.0,
-    "seen": 1792088029.4877338,
-    "ast_hash": "eed27297e7b179fef74234dfb4d8fdde",
+    "mtime": 1792613890.026404,
+    "seen": 1792613908.9689171,
+    "ast_hash": "0bbebca7a5c5388c6e2a1940153af858",
     "semantic_hash": ""
   },
   "tests/test_decision_engine.py": {
@@ -582,9 +582,9 @@
     "semantic_hash": ""
   },
   "README.md": {
-    "mtime": 1792048536.0,
-    "seen": 1792088029.4877338,
-    "ast_hash": "be6d466a7d224c84c9e94970b02eaaa3",
+    "mtime": 1792599231.6887774,
+    "seen": 1792599248.1788347,
+    "ast_hash": "a52dbea8862723012c920cfc62139be3",
     "semantic_hash": ""
   },
   "app/CONTEXT.md": {
@@ -600,9 +600,9 @@
     "semantic_hash": ""
   },
   "configs/default.yaml": {
-    "mtime": 1792087662.5274556,
-    "seen": 1792088029.4877338,
-    "ast_hash": "96810ad265a35b44cab0f6709f0575b7",
+    "mtime": 1792604680.5068195,
+    "seen": 1792604731.1558008,
+    "ast_hash": "a0c2e8783f9bdb0dc51d4b69b7783abf",
     "semantic_hash": ""
   },
   "docs/architecture.md": {
@@ -636,15 +636,21 @@
     "semantic_hash": ""
   },
   "requirements-cuda.txt": {
-    "mtime": 1792048536.0,
-    "seen": 1792088029.4877338,
-    "ast_hash": "3d6385ad32f53d0e25a84f293044bbaf",
+    "mtime": 1792599231.6919897,
+    "seen": 1792599248.1788347,
+    "ast_hash": "18f59bc589d3a6ac8fe43271f7d30463",
     "semantic_hash": ""
   },
   "requirements.txt": {
-    "mtime": 1792048536.0,
-    "seen": 1792088029.4877338,
-    "ast_hash": "dfdf09608564a7361368cb227fdd9402",
+    "mtime": 1792599231.6929817,
+    "seen": 1792599248.1788347,
+    "ast_hash": "107f46a1bd5f8cca6a16e9baa315816e",
+    "semantic_hash": ""
+  },
+  "models/action_report.json": {
+    "mtime": 1792180680.9369159,
+    "seen": 1792599248.1788347,
+    "ast_hash": "ab439ee32d0e95cb503869789fb38dbe",
     "semantic_hash": ""
   }
 }

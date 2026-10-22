@@ -24,6 +24,13 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+        sys.stderr.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
 from hawkeye.detect.pose import (L_ANKLE, L_HIP, L_SHOULDER, L_WRIST, NOSE,  # noqa: E402
                                  R_ANKLE, R_HIP, R_SHOULDER, R_WRIST,
                                  PersonDetection)

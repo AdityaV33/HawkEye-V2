@@ -34,6 +34,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+        sys.stderr.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
 
 def create_weapons_yaml(data_dir: str, class_names: list[str], output: str) -> str:
     """Generate a weapons.yaml data config for ultralytics YOLO training."""

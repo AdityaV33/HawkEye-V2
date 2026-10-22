@@ -45,3 +45,6 @@ runs/
 .ipynb_checkpoints/
 .niti/
 .claude/
+
+# --- Graphify cache ---
+graphify-out/cache/
