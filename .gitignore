@@ -22,6 +22,8 @@ data/faces/
 models/*.pt
 !models/action_gru.pt
 !models/weapons.pt
+!models/action_gru_custom.pt
+!models/weapons_custom.pt
 *.backup
 models/*.onnx
 models/*.engine

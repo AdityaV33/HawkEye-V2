@@ -74,6 +74,7 @@ class ActionClassifier:
         self.device_pref = device
         self.min_conf = min_conf          # floor; per-class thresholds take precedence
         self.fall_min_conf = min_conf
+        self.violence_min_conf = 0.65
         self.infer_stride = max(1, infer_stride)
         self.violence_motion_min = violence_motion_min
         self.hysteresis_window = max(1, hysteresis_window)
@@ -152,14 +153,22 @@ class ActionClassifier:
 
     # --- internals ---
     def _threshold_for(self, label: str) -> float:
-        default = self.fall_min_conf if label.strip().lower() == "fall" else self.min_conf
+        lab = label.strip().lower()
+        if lab == "fall":
+            default = self.fall_min_conf
+        elif lab == "violence":
+            default = getattr(self, "violence_min_conf", self.min_conf)
+        else:
+            default = self.min_conf
+
         checkpoint_threshold = self._thresholds.get(label)
         if checkpoint_threshold is None:
             return float(default)
-        # Permit a deployment-specific sensitivity override for falls while
-        # retaining the checkpoint calibration for every other class.
-        return float(min(checkpoint_threshold, default) if label.strip().lower() == "fall"
-                     else checkpoint_threshold)
+        # Permit a deployment-specific sensitivity override for falls and violence while
+        # retaining the checkpoint calibration for normal actions.
+        if lab in ("fall", "violence"):
+            return float(min(checkpoint_threshold, default))
+        return float(checkpoint_threshold)
 
     def _infer(self) -> List[Candidate]:
         import torch
@@ -204,11 +213,11 @@ class ActionClassifier:
         out: List[Candidate] = []
         for atype, conf, reason in candidates:
             if atype == AnomalyType.VIOLENCE:
-                # A fight needs two bodies and kinetic evidence. Two people
-                # standing calmly close together have neither.
-                if len(persons) < 2:
-                    continue
                 aggressive = any(geometry.aggressive_pose(p) > 0.5 for p in persons)
+                # Fights typically have >=2 people, but a single person aggressively striking
+                # or a partner occluded by motion blur should still register if confidence is high.
+                if len(persons) < 2 and not (len(persons) == 1 and aggressive and conf >= 0.70):
+                    continue
                 if motion < self.violence_motion_min and not aggressive:
                     continue
             elif atype == AnomalyType.FALL:

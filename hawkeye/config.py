@@ -48,6 +48,7 @@ class DetectConfig(BaseModel):
     # thresholds fitted at a target precision, which take precedence over this.
     action_min_conf: float = 0.5
     fall_action_min_conf: float = 0.6
+    violence_action_min_conf: float = 0.65
     # Transitional falls have a lower floor because pose keypoints can be
     # incomplete while the person is still rotating toward the ground.
     fall_trigger_threshold: float = 0.44

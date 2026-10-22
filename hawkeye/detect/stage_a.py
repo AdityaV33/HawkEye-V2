@@ -24,6 +24,7 @@ log = logging.getLogger("hawkeye.detect.stage_a")
 
 # BGR colors
 GREEN, RED, YELLOW, WHITE, CYAN, ORANGE = (80, 220, 80), (60, 60, 235), (40, 210, 235), (240, 240, 240), (235, 200, 60), (0, 140, 255)
+PURPLE = (220, 50, 160)  # BGR for vibrant violet — used exclusively for violence alerts
 # Per-limb-group debug colors (BGR), used only when the person isn't in alert
 # state — an alert paints the whole skeleton red so it stays the dominant
 # signal. Chosen to be distinguishable from each other and from RED/GREEN/CYAN.
@@ -47,6 +48,7 @@ class StageA:
                                        cfg.action_hysteresis_window,
                                        cfg.action_hysteresis_hits)
         self.action.fall_min_conf = cfg.fall_action_min_conf
+        self.action.violence_min_conf = cfg.violence_action_min_conf
         self._last_trigger: Dict[str, float] = {}
         self._weapon_streak: int = 0
 
@@ -262,6 +264,7 @@ class StageA:
         best_fall_p = max(persons, key=heuristics.fall_score) if persons else None
         scene_fall = (event.anomaly_type == AnomalyType.FALL and (alert or event.score >= 0.35))
         scene_weapon = (event.anomaly_type == AnomalyType.WEAPON or bool(weapon_dets))
+        scene_violence = (event.anomaly_type == AnomalyType.VIOLENCE)
 
         for p in persons:
             x1, y1, x2, y2 = map(int, p.box)
@@ -287,6 +290,9 @@ class StageA:
                 person_color = ORANGE
                 pct = int(max(f_score, event.score if scene_fall else 0.0) * 100)
                 person_label = f"FALL {pct}%" if pct > 0 else "FALLING"
+            elif alert and scene_violence:
+                person_color = PURPLE
+                person_label = "VIOLENCE"
             elif alert:
                 person_color = RED
                 person_label = event.anomaly_type.value.upper()
@@ -315,6 +321,10 @@ class StageA:
                 # Falling state: bright orange skeleton
                 for a, b in FACE_EDGES + ARM_EDGES + LEG_EDGES + TORSO_EDGES:
                     line(p.kp(a), p.kp(b), ORANGE, 3)
+            elif alert and scene_violence:
+                # Violence alert: uniform purple skeleton
+                for a, b in FACE_EDGES + ARM_EDGES + LEG_EDGES + TORSO_EDGES:
+                    line(p.kp(a), p.kp(b), PURPLE, 2)
             elif alert:
                 # Other alert state: uniform red skeleton
                 for a, b in FACE_EDGES + ARM_EDGES + LEG_EDGES + TORSO_EDGES:
@@ -332,10 +342,10 @@ class StageA:
 
             neck = geometry.mid(p.kp(L_SHOULDER), p.kp(R_SHOULDER))
             hip_c = geometry.mid(p.kp(L_HIP), p.kp(R_HIP))
-            spine_color = ORANGE if is_fall else (RED if alert else SPINE_CLR)
+            spine_color = ORANGE if is_fall else (PURPLE if (alert and scene_violence) else (RED if alert else SPINE_CLR))
             line(neck, hip_c, spine_color, 3)
 
-            joint_color = (0, 200, 255) if is_fall else (RED if alert else YELLOW)
+            joint_color = (0, 200, 255) if is_fall else (PURPLE if (alert and scene_violence) else (RED if alert else YELLOW))
             for idx in range(17):
                 x, y, c = p.keypoints[idx]
                 if c >= 0.3:
@@ -359,6 +369,8 @@ class StageA:
             color = RED
         elif event.anomaly_type == AnomalyType.FALL and (event.triggered or event.score >= 0.35):
             color = ORANGE
+        elif event.anomaly_type == AnomalyType.VIOLENCE and (event.triggered or event.score >= 0.35):
+            color = PURPLE
         elif event.triggered:
             color = RED
         else:
