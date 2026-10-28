@@ -25,21 +25,21 @@ class DetectConfig(BaseModel):
     device: str = "auto"
     pose_model: str = "yolo11n-pose.pt"
     weapon_model: str = ""            # path to a trained weapon-detection YOLO
-    # The bundled one-class checkpoint needs a conservative confidence floor;
+    # The bundled checkpoint needs a conservative confidence floor;
     # low thresholds turn arbitrary screen regions into "Weapon" detections.
-    weapon_conf: float = 0.35
-    # Hand proximity is not enough to trust a one-class weapon checkpoint;
-    # held-object alerts need a higher confidence floor.
-    weapon_held_conf: float = 0.60
-    # A very high-confidence weapon can be flagged without a visible holder
-    # (for example, a knife lying alone in the camera view).
-    weapon_standalone_conf: float = 0.75
-    # Reject oversized bounding boxes taking more than this fraction of the frame (cars, walls, fans)
-    weapon_max_area_ratio: float = 0.15
+    weapon_conf: float = 0.40
+    # Hand proximity is not enough to trust a weapon checkpoint;
+    # held-object alerts need a verified spatial reach and geometry.
+    weapon_held_conf: float = 0.55
+    # A clearly identified standalone weapon can be flagged without a visible holder
+    # (for example, a knife or gun lying alone on a table/counter).
+    weapon_standalone_conf: float = 0.55
+    # Reject oversized bounding boxes taking more than this fraction of the frame (cars, walls, ceilings)
+    weapon_max_area_ratio: float = 0.35
     # Reject floating weapon detections if no person is holding or standing near the object
     weapon_require_person: bool = True
     # Require weapon detection across N consecutive ticks to eliminate 1-frame noise
-    weapon_hysteresis_hits: int = 3
+    weapon_hysteresis_hits: int = 2
     # Class-label substrings that count as a weapon. Empty => use the built-in
     # default list (see detect/weapons.py WEAPON_KEYWORDS).
     weapon_labels: List[str] = Field(default_factory=list)

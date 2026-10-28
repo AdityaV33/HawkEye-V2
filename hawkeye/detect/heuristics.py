@@ -21,6 +21,10 @@ Candidate = Tuple[AnomalyType, float, str]
 
 def is_human(p: PersonDetection) -> bool:
     """Verify that a detection has human anatomical structure (not background clutter)."""
+    # Reject micro-boxes and tiny thumbnail cards
+    if p.width < 16 or p.height < 28:
+        return False
+
     # Count keypoints with confidence >= 0.20
     kpts_conf = sum(1 for kp in p.keypoints if kp[2] >= 0.20)
     if kpts_conf < 3:
@@ -160,14 +164,13 @@ def fall_score(p: PersonDetection) -> float:
         t_horiz = torso_horiz if torso_horiz is not None else leg_horiz
         return float(min(1.0, 0.55 * leg_horiz + 0.30 * t_horiz + 0.15 * aspect_term))
 
-    # A cropped portrait or seated upper body often has no leg keypoints and
-    # can be slightly wider than tall. Do not call that a fall; without leg
-    # geometry, require a clearly horizontal full-body-shaped box.
-    if aspect >= 1.25:
-        t_horiz = torso_horiz if torso_horiz is not None else 0.8
-        return float(min(1.0, 0.40 * t_horiz + 0.60 * aspect_term))
+    # A cropped portrait, UI thumbnail, or seated upper body has no leg keypoints
+    # and can be wide (e.g. 16:9 video thumbnails). Never blind-default horizontalness
+    # or infer a fall without verified horizontal torso orientation.
+    if torso_horiz is not None and torso_horiz >= 0.50 and aspect >= 1.35:
+        return float(min(1.0, 0.50 * torso_horiz + 0.50 * aspect_term))
 
-    # Torso alone without horizontal legs or horizontal body aspect is NOT a fall
+    # Torso alone without horizontal orientation or horizontal legs is NOT a fall
     return 0.0
 
 
@@ -194,23 +197,42 @@ def analyze(persons: List[PersonDetection], motion_score: float,
 
     # --- Fight / violence (needs >=2 people close + motion) ---
     if len(persons) >= 2:
-        best_prox = 0.0
-        best_iou = 0.0
-        aggro = 0.0
+        best_violence = 0.0
         for i in range(len(persons)):
+            p1 = persons[i]
             for j in range(i + 1, len(persons)):
-                best_prox = max(best_prox, geometry.proximity(persons[i], persons[j]))
-                best_iou = max(best_iou, geometry.box_iou(persons[i].box, persons[j].box))
-            aggro = max(aggro, geometry.aggressive_pose(persons[i]))
-        closeness = max(best_prox, best_iou)
-        violence = closeness * (0.35 + 0.65 * motion_score) + 0.15 * aggro
-        violence = float(np.clip(violence, 0.0, 1.0))
-        # Precision guard: close people in a thumbnail or calm conversation
-        # can have high proximity but are not a police-worthy assault.
-        if violence >= violence_threshold and (
-                motion_score >= violence_motion_min or aggro >= 0.5):
+                p2 = persons[j]
+                iou = geometry.box_iou(p1.box, p2.box)
+                dist = float(np.linalg.norm(p1.centroid - p2.centroid))
+                scale = (p1.height + p2.height) / 2.0 + 1e-6
+
+                # Physical reach constraint: people in separate thumbnail cards or distant cannot be fighting
+                if iou < 0.08 and dist > 0.65 * scale:
+                    continue
+
+                prox = geometry.proximity(p1, p2)
+                closeness = max(iou, prox)
+                aggro_1 = geometry.aggressive_pose(p1)
+                aggro_2 = geometry.aggressive_pose(p2)
+                pair_aggro = max(aggro_1, aggro_2)
+
+                # Calm people standing together without mutual aggressive stance or box overlap are not fighting
+                if pair_aggro < 0.35 and iou < 0.12:
+                    continue
+
+                pair_viol = closeness * (0.35 + 0.65 * motion_score) + 0.20 * pair_aggro
+                pair_viol = float(np.clip(pair_viol, 0.0, 1.0))
+
+                # Precision guard: close people in a thumbnail or calm conversation
+                # can have high proximity but are not a police-worthy assault.
+                if pair_viol >= violence_threshold and (
+                        motion_score >= violence_motion_min or pair_aggro >= 0.5):
+                    if pair_viol > best_violence:
+                        best_violence = pair_viol
+
+        if best_violence >= violence_threshold:
             out.append((
-                AnomalyType.VIOLENCE, violence,
+                AnomalyType.VIOLENCE, best_violence,
                 "two or more people in close contact with rapid motion",
             ))
 

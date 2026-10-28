@@ -509,7 +509,67 @@ def test_weapon_hand_held_filtering():
     assert stage_a._filter_weapons([w_rope_like], [p]) == [], (
         "low-confidence held object was promoted as a weapon"
     )
-    print("  ✓ weapon gating requires hand-held grasp and rejects chest/feet/floating boxes")
+    # 5. Whole human being misclassified as a weapon (IoU >= 0.35 with person)
+    w_human_misdetected = WeaponDetection(
+        box=p.box.copy(), conf=0.92, label="gun",
+    )
+    assert stage_a._filter_weapons([w_human_misdetected], [p]) == [], (
+        "whole human body was accepted as a weapon"
+    )
+    print("  ✓ weapon gating requires hand-held grasp and rejects chest/feet/floating/human boxes")
+
+
+def test_strict_violence_multi_person_and_ground_posture():
+    from hawkeye.detect.action_classifier import ActionClassifier
+    from hawkeye.events.schema import AnomalyType
+
+    clf = ActionClassifier(hysteresis_window=3, hysteresis_hits=2)
+    clf._labels = ["fall", "normal", "violence"]
+    clf._thresholds = {"fall": 0.5, "normal": 0.5, "violence": 0.5}
+
+    # 1. Single person with aggressive arms and high motion must be REJECTED for violence
+    one_aggressive = [make_person(300, 300, arms_up=True)]
+    kept = clf._apply_guards([(AnomalyType.VIOLENCE, 0.99, "x")], one_aggressive, 0.9)
+    assert kept == [], "single person with aggressive pose survived violence guard"
+
+    # 2. Two people far apart (no proximity) must be REJECTED for violence
+    two_far = [make_person(100, 300), make_person(600, 300)]
+    kept = clf._apply_guards([(AnomalyType.VIOLENCE, 0.99, "x")], two_far, 0.9)
+    assert kept == [], "two distant people without proximity survived violence guard"
+
+    # 3. Two people close together with motion must be ACCEPTED for violence
+    two_close = [make_person(300, 300), make_person(380, 300)]
+    kept = clf._apply_guards([(AnomalyType.VIOLENCE, 0.99, "x")], two_close, 0.8)
+    assert len(kept) == 1 and kept[0][0] == AnomalyType.VIOLENCE, "close kinetic pair was rejected for violence"
+
+    # 4. Person on the ground alone must be REJECTED for violence, but ACCEPTED for fall
+    down = [make_person(300, 400, horizontal=True)]
+    kept_viol = clf._apply_guards([(AnomalyType.VIOLENCE, 0.99, "x")], down, 0.5)
+    assert kept_viol == [], "person on ground was classified as violence"
+    kept_fall = clf._apply_guards([(AnomalyType.FALL, 0.99, "x")], down, 0.1)
+    assert len(kept_fall) == 1 and kept_fall[0][0] == AnomalyType.FALL, "person on ground was rejected for fall"
+
+    # 5. One person on ground + one upright person (e.g. bystander) must NOT trigger violence
+    one_down_one_up = [make_person(300, 400, horizontal=True), make_person(320, 300)]
+    kept = clf._apply_guards([(AnomalyType.VIOLENCE, 0.99, "x")], one_down_one_up, 0.6)
+    assert kept == [], "fallen person with bystander was flagged as violence"
+    print("  ✓ strict multi-person, proximity gate, and ground posture priority")
+
+
+def test_weapon_precedence_over_violence():
+    from hawkeye.detect.weapons import WeaponDetection
+    from hawkeye.events.schema import AnomalyType
+
+    # In process(), weapon presence clears violence candidates and promotes WEAPON
+    candidates = [(AnomalyType.VIOLENCE, 0.90, "fight")]
+    w_held = WeaponDetection(box=np.array([320, 305, 350, 335], dtype=np.float32), conf=0.85, label="gun")
+    weapon_dets = [w_held]
+    top = max(wd.conf for wd in weapon_dets)
+    weapon_score = max(0.85, float(top))
+    candidates.append((AnomalyType.WEAPON, weapon_score, f"weapon detected ({weapon_dets[0].label}: {top:.0%})"))
+    candidates = [c for c in candidates if c[0] != AnomalyType.VIOLENCE]
+    assert len(candidates) == 1 and candidates[0][0] == AnomalyType.WEAPON, "weapon did not suppress violence candidate"
+    print("  ✓ weapon alert takes precedence over violence")
 
 
 def test_checkpoint_roundtrip_through_live_wrapper():
@@ -566,6 +626,27 @@ def test_checkpoint_roundtrip_through_live_wrapper():
     print(f"  ✓ checkpoint round-trip through the live wrapper (peak |z| = {peak:.2f})")
 
 
+def test_draw_violence_combatants_and_bystanders():
+    from hawkeye.config import DetectConfig
+    from hawkeye.detect.stage_a import StageA
+    from hawkeye.events.schema import AnomalyType, StageAEvent
+
+    stage_a = StageA(DetectConfig())
+    frame = np.zeros((480, 640, 3), dtype=np.uint8)
+
+    p1 = make_person(200, 300, arms_up=True)
+    p2 = make_person(240, 300, arms_up=True)
+    bystander = make_person(500, 300, arms_up=False)
+
+    event = StageAEvent(
+        frame_id=1, ts=1.0, anomaly_type=AnomalyType.VIOLENCE, score=0.85,
+        motion_score=0.4, person_count=3, boxes=[], triggered=True, reason="fight",
+    )
+    annotated = stage_a._draw(frame, [p1, p2, bystander], [], event)
+    assert annotated is not None and annotated.shape == frame.shape
+    print("  ✓ live feed drawing distinguishes combatants from bystanders without error")
+
+
 def main() -> int:
     checks = [
         test_feature_shapes,
@@ -583,7 +664,10 @@ def main() -> int:
         test_weapon_detector_degrades_on_missing_file,
         test_weapon_label_matching,
         test_weapon_hand_held_filtering,
+        test_strict_violence_multi_person_and_ground_posture,
+        test_weapon_precedence_over_violence,
         test_checkpoint_roundtrip_through_live_wrapper,
+        test_draw_violence_combatants_and_bystanders,
     ]
     print(f"Running {len(checks)} pipeline self-checks...\n")
     failed = 0

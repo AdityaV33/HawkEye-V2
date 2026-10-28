@@ -101,6 +101,20 @@ def leg_horizontalness(p: PersonDetection) -> Optional[float]:
 
 def aggressive_pose(p: PersonDetection) -> float:
     """Wrists raised near/above shoulder height — a weak aggression/defense cue."""
+    # A person lying flat on the floor (horizontal posture) has arms level with shoulders
+    # by geometry, but is not in an aggressive combat stance.
+    aspect = p.width / (p.height + 1e-6)
+    if aspect >= 1.25:
+        return 0.0
+    leg_h = leg_horizontalness(p)
+    if leg_h is not None and leg_h >= 0.45:
+        return 0.0
+    sh = mid(p.kp(L_SHOULDER), p.kp(R_SHOULDER))
+    hip = mid(p.kp(L_HIP), p.kp(R_HIP))
+    torso_h = torso_horizontalness(sh, hip)
+    if torso_h is not None and torso_h >= 0.50:
+        return 0.0
+
     cues = 0
     n = 0
     for wi, si in ((L_WRIST, L_SHOULDER), (R_WRIST, R_SHOULDER)):
@@ -110,3 +124,4 @@ def aggressive_pose(p: PersonDetection) -> float:
             if w[1] <= s[1] + 0.1 * p.height:   # wrist at/above shoulder (image y grows down)
                 cues += 1
     return (cues / n) if n else 0.0
+

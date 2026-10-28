@@ -222,9 +222,9 @@
     "semantic_hash": ""
   },
   "app/src/theme/index.ts": {
-    "mtime": 1792048536.0,
-    "seen": 1792088029.4877338,
-    "ast_hash": "40f98faec559a319ea2b213adb565315",
+    "mtime": 1792676435.402367,
+    "seen": 1793177122.9459822,
+    "ast_hash": "3d3d510f2ba1869f7ac7caf5bd744d66",
     "semantic_hash": ""
   },
   "app/src/theme/tokens.ts": {
@@ -252,9 +252,9 @@
     "semantic_hash": ""
   },
   "eval/evaluate.py": {
-    "mtime": 1792048536.0,
-    "seen": 1792088029.4877338,
-    "ast_hash": "4b73aebfae541aef9234d6140d42a441",
+    "mtime": 1792668141.4890242,
+    "seen": 1793177122.9459822,
+    "ast_hash": "99b84edd04c390001ccf96d16ba42a6d",
     "semantic_hash": ""
   },
   "hawkeye/__init__.py": {
@@ -276,9 +276,9 @@
     "semantic_hash": ""
   },
   "hawkeye/config.py": {
-    "mtime": 1792648412.6169248,
-    "seen": 1792648520.2444224,
-    "ast_hash": "4434d742d057a1c406ac3781035fcf40",
+    "mtime": 1793177023.67147,
+    "seen": 1793177122.9459822,
+    "ast_hash": "cf8569fa97c64e56c1f21552c7c8977b",
     "semantic_hash": ""
   },
   "hawkeye/decision/__init__.py": {
@@ -306,9 +306,9 @@
     "semantic_hash": ""
   },
   "hawkeye/detect/action_classifier.py": {
-    "mtime": 1792648467.126722,
-    "seen": 1792648520.2444224,
-    "ast_hash": "728e840c7c2d00e0544960091643d11d",
+    "mtime": 1793191715.7987058,
+    "seen": 1793191776.8189218,
+    "ast_hash": "2b41386baf00637606b8563a79028f6d",
     "semantic_hash": ""
   },
   "hawkeye/detect/action_model.py": {
@@ -318,21 +318,21 @@
     "semantic_hash": ""
   },
   "hawkeye/detect/geometry.py": {
-    "mtime": 1792599231.689978,
-    "seen": 1792599248.1788347,
-    "ast_hash": "43b1e1a4826cbbad9e739d95a6f66f85",
+    "mtime": 1792940534.6552038,
+    "seen": 1793177122.9459822,
+    "ast_hash": "7814887b0c4e100396447b08455ff740",
     "semantic_hash": ""
   },
   "hawkeye/detect/heuristics.py": {
-    "mtime": 1792599231.689978,
-    "seen": 1792599248.1788347,
-    "ast_hash": "02669ad0fe0e460decd3e65aa3ad2e43",
+    "mtime": 1793191715.7911859,
+    "seen": 1793191776.8189218,
+    "ast_hash": "cd509d7dae7026f71a0b596af1ffa8c9",
     "semantic_hash": ""
   },
   "hawkeye/detect/pose.py": {
-    "mtime": 1792599231.6909823,
-    "seen": 1792599248.1788347,
-    "ast_hash": "3fcab9315068b482058ac75ac148895a",
+    "mtime": 1793177035.7315967,
+    "seen": 1793177122.9459822,
+    "ast_hash": "3151be6422d270ec14812c2e602e4b6c",
     "semantic_hash": ""
   },
   "hawkeye/detect/scene_anomaly.py": {
@@ -348,15 +348,15 @@
     "semantic_hash": ""
   },
   "hawkeye/detect/stage_a.py": {
-    "mtime": 1792648426.3830123,
-    "seen": 1792648520.2444224,
-    "ast_hash": "1702dc47c3f30cc9de654f44d4de5611",
+    "mtime": 1793191715.7871857,
+    "seen": 1793191776.8189218,
+    "ast_hash": "75f9506f6a47e402608ced105e696ac3",
     "semantic_hash": ""
   },
   "hawkeye/detect/weapons.py": {
-    "mtime": 1792599231.6919897,
-    "seen": 1792599248.1788347,
-    "ast_hash": "2f966d7da94b90b914250b760bd71675",
+    "mtime": 1793176671.810462,
+    "seen": 1793177122.9459822,
+    "ast_hash": "e6bcbc861d29cbab9fd3bd9b4070e930",
     "semantic_hash": ""
   },
   "hawkeye/events/__init__.py": {
@@ -426,9 +426,9 @@
     "semantic_hash": ""
   },
   "hawkeye/pipeline.py": {
-    "mtime": 1792599231.6919897,
-    "seen": 1792599248.1788347,
-    "ast_hash": "7a75ee5c16437a9e965c4dfe6ca7514b",
+    "mtime": 1793191715.8055842,
+    "seen": 1793191776.8189218,
+    "ast_hash": "2cfae543a550bc1a1c484d1ba0517f72",
     "semantic_hash": ""
   },
   "hawkeye/reason/__init__.py": {
@@ -558,9 +558,9 @@
     "semantic_hash": ""
   },
   "tests/test_action_pipeline.py": {
-    "mtime": 1792613890.026404,
-    "seen": 1792613908.9689171,
-    "ast_hash": "0bbebca7a5c5388c6e2a1940153af858",
+    "mtime": 1793191715.811653,
+    "seen": 1793191776.8189218,
+    "ast_hash": "06967cf79730b9ee9a3a017feda647e4",
     "semantic_hash": ""
   },
   "tests/test_decision_engine.py": {
@@ -600,9 +600,9 @@
     "semantic_hash": ""
   },
   "configs/default.yaml": {
-    "mtime": 1792660168.7739522,
-    "seen": 1792660195.9640722,
-    "ast_hash": "3dfa06e2e0d185f9d9ed5b987390bfb3",
+    "mtime": 1793177012.8839674,
+    "seen": 1793177122.9459822,
+    "ast_hash": "dd824193a965991822d1361985ed4dfc",
     "semantic_hash": ""
   },
   "docs/architecture.md": {
@@ -651,6 +651,12 @@
     "mtime": 1792180680.9369159,
     "seen": 1792599248.1788347,
     "ast_hash": "ab439ee32d0e95cb503869789fb38dbe",
+    "semantic_hash": ""
+  },
+  "maxresdefault.jpg": {
+    "mtime": 1792993471.4534743,
+    "seen": 1793177122.9459822,
+    "ast_hash": "8ec024f8513a2653b6c1f32f7c0147e4",
     "semantic_hash": ""
   }
 }

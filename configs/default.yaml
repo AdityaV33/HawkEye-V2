@@ -14,24 +14,22 @@ detect:
   person_conf: 0.35
   # Trained YOLO for guns/knives (see docs/training.md). The bundled checkpoint
   # is one-class, so use a conservative floor plus handheld/temporal gating.
-  weapon_model: "models/weapons_custom.pt"
+  weapon_model: "models/weapons.pt"
   # The bundled checkpoint scores stylized knives around 0.40; keep this
   # proposal floor below that and rely on temporal/handheld gating afterward.
-  weapon_conf: 0.35
-  # Held-object alerts use a stricter floor so ropes, phones, and tools near a
-  # person's hands are not promoted from low-confidence proposals.
-  weapon_held_conf: 0.60
+  weapon_conf: 0.40
+  # Held-object alerts use a calibrated floor so handheld weapons trigger reliably
+  # while ropes, phones, and tools are filtered by spatial reach and geometry.
+  weapon_held_conf: 0.55
   # Allow clearly identified standalone weapons; lower-confidence detections
   # still require a verified person/hand relationship.
-  # Standalone alerts are high precision only; weak object-like matches must
-  # not be promoted without a visible holder.
-  weapon_standalone_conf: 0.75
-  # Reject oversized bounding boxes taking more than 15% of frame (cars, walls, fans)
-  weapon_max_area_ratio: 0.15
+  weapon_standalone_conf: 0.55
+  # Reject oversized bounding boxes taking more than 35% of frame (cars, walls, room ceilings)
+  weapon_max_area_ratio: 0.35
   # Suppress floating weapons when no person is holding or standing near the object
   weapon_require_person: true
   # Require weapon detection across N consecutive ticks before triggering
-  weapon_hysteresis_hits: 3
+  weapon_hysteresis_hits: 2
   # Class-label filter for weapon detections. Empty => use the built-in keyword
   # list in detect/weapons.py (guns AND knives), matched on token boundaries.
   # Narrow this ONLY after reading the per-class mAP50 of your own trained model

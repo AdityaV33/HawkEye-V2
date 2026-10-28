@@ -177,7 +177,16 @@ class Pipeline:
                 self._ring.append(frame.copy())
                 self._latest_raw = frame.copy()   # for the attendance worker
 
-                event, annotated, _ = self.stage_a.process(frame, frame_id, t0)
+                try:
+                    event, annotated, _ = self.stage_a.process(frame, frame_id, t0)
+                except Exception as e:
+                    log.exception("Stage A processing error on frame %d: %s", frame_id, e)
+                    annotated = frame.copy()
+                    event = StageAEvent(
+                        frame_id=frame_id, ts=t0, anomaly_type=AnomalyType.NORMAL,
+                        score=0.0, motion_score=0.0, person_count=0, boxes=[],
+                        triggered=False, reason="error",
+                    )
                 ok, buf = cv2.imencode(".jpg", annotated, [cv2.IMWRITE_JPEG_QUALITY, 70])
                 if ok:
                     self.hub.set_frame(buf.tobytes())

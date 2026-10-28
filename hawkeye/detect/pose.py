@@ -92,8 +92,8 @@ def is_valid_human_detection(box: np.ndarray, kp: np.ndarray, min_kpt_conf: floa
     if aspect > 3.2 or aspect < 0.18:
         return False
 
-    # Require minimum pixel size (a human must occupy at least 10x18 pixels)
-    if bw < 10 or bh < 18:
+    # Require minimum pixel size (reject tiny thumbnail icons, UI clutter, and noise)
+    if bw < 16 or bh < 28:
         return False
 
     # Require at least 4 keypoints with confidence >= min_kpt_conf
