@@ -35,6 +35,15 @@ detect:
   # Narrow this ONLY after reading the per-class mAP50 of your own trained model
   # (scripts/train_weapon.py prints it) — do not carry over another run's list.
   weapon_labels: []
+  # Trained YOLO for fire & smoke detection (Approach C hybrid: YOLO + chromatic verification).
+  # When set + present, YOLO proposes candidates and chromatic gating verifies them.
+  # When the file is missing, the zero-weight chromatic & flicker fallback runs automatically.
+  fire_model: "models/fire.pt"
+  fire_conf: 0.40
+  fire_hysteresis_hits: 2
+  fire_verify_chromatic: true
+  fire_chromatic_fallback: true
+  fire_labels: []
   # Trained action classifier (violence/fall/normal) from scripts/train_action.py.
   # When set + present, it REPLACES the zero-training heuristics. Empty = heuristics.
   # No weights ship with the repo — train your own (see docs/training.md) and

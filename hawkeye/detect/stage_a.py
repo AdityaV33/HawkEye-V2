@@ -18,6 +18,7 @@ from .pose import (ARM_EDGES, FACE_EDGES, L_ANKLE, L_ELBOW, L_HIP,
                    R_SHOULDER, R_WRIST, TORSO_EDGES, PersonDetection,
                    PoseDetector)
 from .scene_anomaly import MotionAnomaly
+from .fire import FIRE_KEYWORDS, FireDetection, FireDetector
 from .weapons import WEAPON_KEYWORDS, WeaponDetector
 
 log = logging.getLogger("hawkeye.detect.stage_a")
@@ -49,8 +50,17 @@ class StageA:
                                        cfg.action_hysteresis_hits)
         self.action.fall_min_conf = cfg.fall_action_min_conf
         self.action.violence_min_conf = cfg.violence_action_min_conf
+        self.fire = FireDetector(
+            model_path=cfg.fire_model,
+            device=cfg.device,
+            conf=cfg.fire_conf,
+            keywords=cfg.fire_labels or FIRE_KEYWORDS,
+            verify_chromatic=cfg.fire_verify_chromatic,
+            chromatic_fallback=cfg.fire_chromatic_fallback,
+        )
         self._last_trigger: Dict[str, float] = {}
         self._weapon_streak: int = 0
+        self._fire_streak: int = 0
 
     def load(self) -> "StageA":
         # Surface the resolved compute device (auto -> cuda/mps/cpu) so a
@@ -58,6 +68,7 @@ class StageA:
         log.info("Stage A device: %s (requested '%s')", self.pose.device, self.cfg.device)
         self.pose.load()
         self.weapons.load()
+        self.fire.load()
         if self.action.available:
             self.action.load()
             log.info("Stage A action source: TRAINED model (%s)", self.cfg.action_model)
@@ -245,9 +256,26 @@ class StageA:
             # not a generic unarmed violence brawl.
             candidates = [c for c in candidates if c[0] != AnomalyType.VIOLENCE]
 
-        # Fuse: WEAPON takes top priority if present; otherwise highest-scoring candidate wins.
+        # Fire detection (YOLO + chromatic verification or zero-weight chromatic fallback)
+        raw_fire = self.fire.detect(frame)
+        if raw_fire:
+            self._fire_streak += 1
+        else:
+            self._fire_streak = 0
+
+        fire_dets: List[FireDetection] = raw_fire if self._fire_streak >= self.cfg.fire_hysteresis_hits else []
+        if fire_dets:
+            top_fire = max(fd.conf for fd in fire_dets)
+            fire_score = max(0.88, float(top_fire))
+            candidates.append((AnomalyType.FIRE, fire_score,
+                               f"fire detected ({fire_dets[0].label}: {top_fire:.0%})"))
+
+        # Fuse: FIRE and WEAPON take top priority if present; otherwise highest-scoring candidate wins.
+        fire_cands = [c for c in candidates if c[0] == AnomalyType.FIRE]
         weapon_cands = [c for c in candidates if c[0] == AnomalyType.WEAPON]
-        if weapon_cands:
+        if fire_cands:
+            atype, cscore, reason = fire_cands[0]
+        elif weapon_cands:
             atype, cscore, reason = weapon_cands[0]
         elif candidates:
             atype, cscore, reason = max(candidates, key=lambda c: c[1])
@@ -259,7 +287,11 @@ class StageA:
 
         all_boxes = [BBox(x1=float(p.box[0]), y1=float(p.box[1]),
                           x2=float(p.box[2]), y2=float(p.box[3])) for p in persons]
-        if atype == AnomalyType.WEAPON and weapon_dets:
+        if atype == AnomalyType.FIRE and fire_dets:
+            for f in fire_dets:
+                all_boxes.append(BBox(x1=float(f.box[0]), y1=float(f.box[1]),
+                                      x2=float(f.box[2]), y2=float(f.box[3])))
+        elif atype == AnomalyType.WEAPON and weapon_dets:
             for w in weapon_dets:
                 all_boxes.append(BBox(x1=float(w.box[0]), y1=float(w.box[1]),
                                       x2=float(w.box[2]), y2=float(w.box[3])))
@@ -270,7 +302,7 @@ class StageA:
             boxes=all_boxes,
             triggered=triggered, reason=reason,
         )
-        annotated = self._draw(frame, persons, weapon_dets, event)
+        annotated = self._draw(frame, persons, weapon_dets, event, fire_dets=fire_dets)
         return event, annotated, persons
 
     def _maybe_trigger(self, atype: AnomalyType, score: float, ts: float) -> bool:
@@ -286,7 +318,8 @@ class StageA:
         return True
 
     # --- rendering ---
-    def _draw(self, frame, persons, weapon_dets, event: StageAEvent) -> np.ndarray:
+    def _draw(self, frame, persons, weapon_dets, event: StageAEvent,
+              fire_dets: Optional[List[FireDetection]] = None) -> np.ndarray:
         import cv2
 
         img = frame.copy()
@@ -420,6 +453,17 @@ class StageA:
             cv2.putText(img, f"WEAPON {w.conf:.2f}", (x1, max(0, y1 - 6)),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, RED, 2)
 
+        if fire_dets:
+            for f in fire_dets:
+                fx1, fy1, fx2, fy2 = map(int, f.box)
+                cv2.rectangle(img, (fx1, fy1), (fx2, fy2), ORANGE, 3)
+                flabel = f"{f.label.upper()} {f.conf:.0%}"
+                (tw, th), _ = cv2.getTextSize(flabel, cv2.FONT_HERSHEY_SIMPLEX, 0.55, 2)
+                f_by1 = max(0, fy1 - th - 8)
+                cv2.rectangle(img, (fx1, f_by1), (fx1 + tw + 8, fy1), ORANGE, -1)
+                cv2.putText(img, flabel, (fx1 + 4, fy1 - 4),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 0, 0), 2)
+
         self._draw_hud(img, event, cv2)
         return img
 
@@ -427,7 +471,9 @@ class StageA:
         h, w = img.shape[:2]
         cv2.rectangle(img, (0, 0), (w, 40), (25, 25, 25), -1)
         label = event.anomaly_type.value.upper()
-        if event.anomaly_type == AnomalyType.WEAPON:
+        if event.anomaly_type == AnomalyType.FIRE:
+            color = ORANGE
+        elif event.anomaly_type == AnomalyType.WEAPON:
             color = RED
         elif event.anomaly_type == AnomalyType.FALL and (event.triggered or event.score >= 0.35):
             color = YELLOW

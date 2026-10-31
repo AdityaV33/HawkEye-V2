@@ -276,9 +276,9 @@
     "semantic_hash": ""
   },
   "hawkeye/config.py": {
-    "mtime": 1793177023.67147,
-    "seen": 1793177122.9459822,
-    "ast_hash": "cf8569fa97c64e56c1f21552c7c8977b",
+    "mtime": 1793335417.5505278,
+    "seen": 1793335612.3341043,
+    "ast_hash": "9709e345011ebbf799a187945e09bf7b",
     "semantic_hash": ""
   },
   "hawkeye/decision/__init__.py": {
@@ -306,8 +306,8 @@
     "semantic_hash": ""
   },
   "hawkeye/detect/action_classifier.py": {
-    "mtime": 1793191715.7987058,
-    "seen": 1793191776.8189218,
+    "mtime": 1793296595.6014776,
+    "seen": 1793335612.3341043,
     "ast_hash": "2b41386baf00637606b8563a79028f6d",
     "semantic_hash": ""
   },
@@ -324,8 +324,8 @@
     "semantic_hash": ""
   },
   "hawkeye/detect/heuristics.py": {
-    "mtime": 1793191715.7911859,
-    "seen": 1793191776.8189218,
+    "mtime": 1793296595.6028574,
+    "seen": 1793335612.3341043,
     "ast_hash": "cd509d7dae7026f71a0b596af1ffa8c9",
     "semantic_hash": ""
   },
@@ -348,9 +348,9 @@
     "semantic_hash": ""
   },
   "hawkeye/detect/stage_a.py": {
-    "mtime": 1793191715.7871857,
-    "seen": 1793191776.8189218,
-    "ast_hash": "75f9506f6a47e402608ced105e696ac3",
+    "mtime": 1793335487.3242,
+    "seen": 1793335612.3341043,
+    "ast_hash": "f6485289d05e3e5ca7e48d71c89898ac",
     "semantic_hash": ""
   },
   "hawkeye/detect/weapons.py": {
@@ -600,9 +600,9 @@
     "semantic_hash": ""
   },
   "configs/default.yaml": {
-    "mtime": 1793177012.8839674,
-    "seen": 1793177122.9459822,
-    "ast_hash": "dd824193a965991822d1361985ed4dfc",
+    "mtime": 1793335433.4913862,
+    "seen": 1793335612.3341043,
+    "ast_hash": "2abd1ff84a8404614130d41fb6e19c01",
     "semantic_hash": ""
   },
   "docs/architecture.md": {
@@ -657,6 +657,18 @@
     "mtime": 1792993471.4534743,
     "seen": 1793177122.9459822,
     "ast_hash": "8ec024f8513a2653b6c1f32f7c0147e4",
+    "semantic_hash": ""
+  },
+  "hawkeye/detect/fire.py": {
+    "mtime": 1793378190.5143015,
+    "seen": 1793378277.4822316,
+    "ast_hash": "64cdd253e48e34a93b3a6448bb8a8c13",
+    "semantic_hash": ""
+  },
+  "tests/test_fire_detector.py": {
+    "mtime": 1793378221.115918,
+    "seen": 1793378277.4822316,
+    "ast_hash": "033b90e80a6ebdf4b5441901dbd836a3",
     "semantic_hash": ""
   }
 }
