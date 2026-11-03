@@ -20,10 +20,10 @@ detect:
   weapon_conf: 0.40
   # Held-object alerts use a calibrated floor so handheld weapons trigger reliably
   # while ropes, phones, and tools are filtered by spatial reach and geometry.
-  weapon_held_conf: 0.60
+  weapon_held_conf: 0.65
   # Allow clearly identified standalone weapons; lower-confidence detections
   # still require a verified person/hand relationship.
-  weapon_standalone_conf: 0.65
+  weapon_standalone_conf: 0.70
   # Reject oversized bounding boxes taking more than 35% of frame (cars, walls, room ceilings)
   weapon_max_area_ratio: 0.35
   # Suppress floating weapons when no person is holding or standing near the object
