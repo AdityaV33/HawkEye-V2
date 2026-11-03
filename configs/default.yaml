@@ -23,7 +23,7 @@ detect:
   weapon_held_conf: 0.55
   # Allow clearly identified standalone weapons; lower-confidence detections
   # still require a verified person/hand relationship.
-  weapon_standalone_conf: 0.55
+  weapon_standalone_conf: 0.60
   # Reject oversized bounding boxes taking more than 35% of frame (cars, walls, room ceilings)
   weapon_max_area_ratio: 0.35
   # Suppress floating weapons when no person is holding or standing near the object

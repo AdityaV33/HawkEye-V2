@@ -33,7 +33,7 @@ class DetectConfig(BaseModel):
     weapon_held_conf: float = 0.55
     # A clearly identified standalone weapon can be flagged without a visible holder
     # (for example, a knife or gun lying alone on a table/counter).
-    weapon_standalone_conf: float = 0.55
+    weapon_standalone_conf: float = 0.60
     # Reject oversized bounding boxes taking more than this fraction of the frame (cars, walls, ceilings)
     weapon_max_area_ratio: float = 0.35
     # Reject floating weapon detections if no person is holding or standing near the object
