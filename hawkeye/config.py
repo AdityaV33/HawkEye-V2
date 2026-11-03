@@ -45,8 +45,9 @@ class DetectConfig(BaseModel):
     weapon_labels: List[str] = Field(default_factory=list)
     # Fire and smoke detection (Hybrid Approach C: YOLO + chromatic verification)
     fire_model: str = ""              # path to a trained fire/smoke YOLO (e.g. models/fire.pt)
-    fire_conf: float = 0.40           # confidence floor for fire/smoke detector
-    fire_hysteresis_hits: int = 2     # consecutive frames required to trigger FIRE event
+    fire_conf: float = 0.70           # strict high confidence floor for fire detector (well above average)
+    smoke_conf: float = 0.70          # strict high confidence floor for smoke detector
+    fire_hysteresis_hits: int = 3     # consecutive frames required to trigger FIRE event
     fire_verify_chromatic: bool = True # use chromatic & edge-flicker gate to reject screens/clothing
     fire_chromatic_fallback: bool = True # run lightweight chromatic detector when fire_model is not present
     fire_labels: List[str] = Field(default_factory=list) # optional override for fire class keywords

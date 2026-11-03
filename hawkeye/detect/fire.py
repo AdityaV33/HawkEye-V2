@@ -36,7 +36,8 @@ class FireDetector:
         self,
         model_path: str = "",
         device: str = "auto",
-        conf: float = 0.40,
+        conf: float = 0.70,
+        smoke_conf: float = 0.70,
         keywords: Sequence[str] = FIRE_KEYWORDS,
         verify_chromatic: bool = True,
         chromatic_fallback: bool = True,
@@ -44,6 +45,7 @@ class FireDetector:
         self.model_path = model_path
         self.device = device
         self.conf = conf
+        self.smoke_conf = smoke_conf
         self.keywords = tuple(k.lower() for k in keywords if k and k.strip())
         self.verify_chromatic = verify_chromatic
         self.chromatic_fallback = chromatic_fallback
@@ -173,7 +175,7 @@ class FireDetector:
         total_pixels = int(roi.shape[0] * roi.shape[1])
         density = smoke_pixels / max(1, total_pixels)
 
-        if density < 0.10:
+        if density < 0.20:
             return False, density
 
         return True, float(np.clip(density, 0.1, 1.0))
@@ -276,6 +278,8 @@ class FireDetector:
                     continue
 
             conf = float(np.clip(0.60 + 0.30 * c_score, 0.60, 0.95))
+            if conf < self.conf:
+                continue
             box_arr = np.array([x1, y1, x2, y2], dtype=np.float32)
             out.append(FireDetection(box=box_arr, conf=conf, label="fire", chromatic_score=c_score))
 
@@ -296,7 +300,8 @@ class FireDetector:
         # If model is loaded, run YOLO + Chromatic gating
         if self._model is not None:
             try:
-                results = self._model.predict(frame, conf=self.conf, device=self.device, verbose=False)
+                proposal_conf = min(self.conf, self.smoke_conf)
+                results = self._model.predict(frame, conf=proposal_conf, device=self.device, verbose=False)
                 out: List[FireDetection] = []
                 if not results or results[0].boxes is None:
                     return out
@@ -315,11 +320,20 @@ class FireDetector:
                     if not self._matches(label):
                         continue
 
+                    is_smoke = "smoke" in label
+                    required_conf = self.smoke_conf if is_smoke else self.conf
+                    if float(cf) < required_conf:
+                        continue
+
                     x1, y1, x2, y2 = map(int, box)
                     x1, y1 = max(0, x1), max(0, y1)
                     x2, y2 = min(w, x2), min(h, y2)
                     box_w, box_h = max(0, x2 - x1), max(0, y2 - y1)
                     box_area = float(box_w * box_h)
+
+                    # Reject tiny pixel noise boxes (< 16px) or oversized clutter
+                    if box_w < 16 or box_h < 16:
+                        continue
 
                     if frame_area > 0 and (box_area / frame_area) > max_area_ratio:
                         continue

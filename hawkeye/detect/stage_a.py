@@ -26,6 +26,7 @@ log = logging.getLogger("hawkeye.detect.stage_a")
 # BGR colors
 GREEN, RED, YELLOW, WHITE, CYAN, ORANGE = (80, 220, 80), (60, 60, 235), (40, 210, 235), (240, 240, 240), (235, 200, 60), (0, 140, 255)
 PURPLE = (220, 50, 160)  # BGR for vibrant violet — used exclusively for violence alerts
+GREY = (160, 160, 160)    # BGR for smoke detections
 # Per-limb-group debug colors (BGR), used only when the person isn't in alert
 # state — an alert paints the whole skeleton red so it stays the dominant
 # signal. Chosen to be distinguishable from each other and from RED/GREEN/CYAN.
@@ -54,6 +55,7 @@ class StageA:
             model_path=cfg.fire_model,
             device=cfg.device,
             conf=cfg.fire_conf,
+            smoke_conf=cfg.smoke_conf,
             keywords=cfg.fire_labels or FIRE_KEYWORDS,
             verify_chromatic=cfg.fire_verify_chromatic,
             chromatic_fallback=cfg.fire_chromatic_fallback,
@@ -456,11 +458,13 @@ class StageA:
         if fire_dets:
             for f in fire_dets:
                 fx1, fy1, fx2, fy2 = map(int, f.box)
-                cv2.rectangle(img, (fx1, fy1), (fx2, fy2), ORANGE, 3)
+                is_smoke = "smoke" in f.label.lower()
+                box_color = GREY if is_smoke else ORANGE
+                cv2.rectangle(img, (fx1, fy1), (fx2, fy2), box_color, 3)
                 flabel = f"{f.label.upper()} {f.conf:.0%}"
                 (tw, th), _ = cv2.getTextSize(flabel, cv2.FONT_HERSHEY_SIMPLEX, 0.55, 2)
                 f_by1 = max(0, fy1 - th - 8)
-                cv2.rectangle(img, (fx1, f_by1), (fx1 + tw + 8, fy1), ORANGE, -1)
+                cv2.rectangle(img, (fx1, f_by1), (fx1 + tw + 8, fy1), box_color, -1)
                 cv2.putText(img, flabel, (fx1 + 4, fy1 - 4),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 0, 0), 2)
 
