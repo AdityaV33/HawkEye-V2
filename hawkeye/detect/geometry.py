@@ -121,7 +121,7 @@ def aggressive_pose(p: PersonDetection) -> float:
         w, s = p.kp(wi), p.kp(si)
         if w is not None and s is not None:
             n += 1
-            if w[1] <= s[1] + 0.1 * p.height:   # wrist at/above shoulder (image y grows down)
+            if w[1] <= s[1] + 0.02 * p.height:   # wrist at/above shoulder level (image y grows down)
                 cues += 1
     return (cues / n) if n else 0.0
 

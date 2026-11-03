@@ -336,12 +336,15 @@ class StageA:
         scene_weapon = (event.anomaly_type == AnomalyType.WEAPON or bool(weapon_dets))
         scene_violence = (event.anomaly_type == AnomalyType.VIOLENCE and (alert or event.score >= 0.35))
 
-        # Identify specific combatant participants during violence so bystanders stay green
+        # Identify specific combatant participants during violence so bystanders stay green.
+        # In a group of people, flash only the single active fighting pair (at most 2 people) at any instance.
         combatant_indices = set()
         if scene_violence and len(persons) >= 2:
             if len(persons) == 2:
                 combatant_indices = {0, 1}
             else:
+                best_score = -1.0
+                best_pair = None
                 for i in range(len(persons)):
                     p1 = persons[i]
                     for j in range(i + 1, len(persons)):
@@ -349,18 +352,25 @@ class StageA:
                         iou = geometry.box_iou(p1.box, p2.box)
                         dist = float(np.linalg.norm(p1.centroid - p2.centroid))
                         scale = (p1.height + p2.height) / 2.0 + 1e-6
-                        if iou >= 0.08 or dist <= 0.60 * scale:
-                            agg1 = geometry.aggressive_pose(p1)
-                            agg2 = geometry.aggressive_pose(p2)
-                            if iou >= 0.12 or agg1 >= 0.35 or agg2 >= 0.35:
-                                combatant_indices.add(i)
-                                combatant_indices.add(j)
-                if not combatant_indices:
-                    best_pair = min(
+                        prox = geometry.proximity(p1, p2)
+                        closeness = max(iou, prox)
+                        agg1 = geometry.aggressive_pose(p1)
+                        agg2 = geometry.aggressive_pose(p2)
+                        pair_aggro = max(agg1, agg2)
+                        # Combat interaction score: mutual proximity + aggressive striking/guard posture
+                        pair_score = 0.55 * closeness + 0.45 * pair_aggro
+                        # Must be within physical reach
+                        if (iou >= 0.06 or dist <= 0.65 * scale) and pair_score > best_score:
+                            best_score = pair_score
+                            best_pair = (i, j)
+                if best_pair is not None:
+                    combatant_indices = {best_pair[0], best_pair[1]}
+                else:
+                    closest = min(
                         ((i, j) for i in range(len(persons)) for j in range(i + 1, len(persons))),
                         key=lambda pair: float(np.linalg.norm(persons[pair[0]].centroid - persons[pair[1]].centroid))
                     )
-                    combatant_indices.update(best_pair)
+                    combatant_indices = {closest[0], closest[1]}
 
         for p_idx, p in enumerate(persons):
             x1, y1, x2, y2 = map(int, p.box)
@@ -439,10 +449,10 @@ class StageA:
 
             neck = geometry.mid(p.kp(L_SHOULDER), p.kp(R_SHOULDER))
             hip_c = geometry.mid(p.kp(L_HIP), p.kp(R_HIP))
-            spine_color = YELLOW if is_fall else (PURPLE if scene_violence else (RED if alert else SPINE_CLR))
+            spine_color = YELLOW if is_fall else (PURPLE if (scene_violence and is_combatant) else (RED if alert else SPINE_CLR))
             line(neck, hip_c, spine_color, 3)
 
-            joint_color = YELLOW if is_fall else (PURPLE if scene_violence else (RED if alert else YELLOW))
+            joint_color = YELLOW if is_fall else (PURPLE if (scene_violence and is_combatant) else (RED if alert else YELLOW))
             for idx in range(17):
                 x, y, c = p.keypoints[idx]
                 if c >= 0.3:

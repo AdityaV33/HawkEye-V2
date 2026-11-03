@@ -636,13 +636,14 @@ def test_draw_violence_combatants_and_bystanders():
 
     p1 = make_person(200, 300, arms_up=True)
     p2 = make_person(240, 300, arms_up=True)
-    bystander = make_person(500, 300, arms_up=False)
+    bystander1 = make_person(500, 300, arms_up=False)
+    bystander2 = make_person(540, 300, arms_up=False)
 
     event = StageAEvent(
         frame_id=1, ts=1.0, anomaly_type=AnomalyType.VIOLENCE, score=0.85,
-        motion_score=0.4, person_count=3, boxes=[], triggered=True, reason="fight",
+        motion_score=0.4, person_count=4, boxes=[], triggered=True, reason="fight",
     )
-    annotated = stage_a._draw(frame, [p1, p2, bystander], [], event)
+    annotated = stage_a._draw(frame, [p1, p2, bystander1, bystander2], [], event)
     assert annotated is not None and annotated.shape == frame.shape
     print("  ✓ live feed drawing distinguishes combatants from bystanders without error")
 

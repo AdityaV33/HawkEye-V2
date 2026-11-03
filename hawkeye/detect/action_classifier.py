@@ -162,11 +162,13 @@ class ActionClassifier:
             default = self.min_conf
 
         checkpoint_threshold = self._thresholds.get(label)
+        if lab == "violence" and default > 0:
+            return float(default)
         if checkpoint_threshold is None:
             return float(default)
-        # Permit a deployment-specific sensitivity override for falls and violence while
+        # Permit a deployment-specific sensitivity override for falls while
         # retaining the checkpoint calibration for normal actions.
-        if lab in ("fall", "violence"):
+        if lab == "fall":
             return float(min(checkpoint_threshold, default))
         return float(checkpoint_threshold)
 
@@ -242,9 +244,12 @@ class ActionClassifier:
                 if fallen_count > 0 and upright_count < 2:
                     continue
 
-                aggressive = any(geometry.aggressive_pose(p) > 0.5 for p in persons)
-                if motion < self.violence_motion_min and not aggressive:
-                    continue
+                # Physical fights require active scene motion. If motion is below the threshold,
+                # suppress violence unless both people exhibit distinct aggressive combat postures.
+                if motion < self.violence_motion_min:
+                    agg_count = sum(1 for p in persons if geometry.aggressive_pose(p) > 0.5)
+                    if agg_count < 2 or motion < 0.10:
+                        continue
             elif atype == AnomalyType.FALL:
                 # A fall can ONLY apply to humans: reject if no persons are in the scene
                 if not persons:
