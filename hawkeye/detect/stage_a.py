@@ -341,7 +341,7 @@ class StageA:
         combatant_indices = set()
         if scene_violence and len(persons) >= 2:
             if len(persons) == 2:
-                if geometry.are_depth_compatible(persons[0], persons[1]):
+                if geometry.score_combat_pair(persons[0], persons[1]) > 0:
                     combatant_indices = {0, 1}
                 else:
                     combatant_indices = {0 if persons[0].height >= persons[1].height else 1}
@@ -349,35 +349,27 @@ class StageA:
                 best_score = -1.0
                 best_pair = None
                 for i in range(len(persons)):
-                    p1 = persons[i]
                     for j in range(i + 1, len(persons)):
-                        p2 = persons[j]
-                        if not geometry.are_depth_compatible(p1, p2):
-                            continue
-                        if not geometry.are_in_combat_range(p1, p2):
-                            continue
-                        iou = geometry.box_iou(p1.box, p2.box)
-                        prox = geometry.proximity(p1, p2)
-                        closeness = max(iou, prox)
-                        agg1 = geometry.aggressive_pose(p1)
-                        agg2 = geometry.aggressive_pose(p2)
-                        pair_aggro = max(agg1, agg2)
-                        sr = geometry.scale_ratio(p1, p2)
-                        # Combat interaction score: mutual closeness + combat stance + depth alignment
-                        pair_score = 0.40 * closeness + 0.30 * pair_aggro + 0.30 * sr
-                        if pair_score > best_score:
-                            best_score = pair_score
+                        s = geometry.score_combat_pair(persons[i], persons[j])
+                        if s > best_score:
+                            best_score = s
                             best_pair = (i, j)
-                if best_pair is not None:
+                if best_pair is not None and best_score > 0:
                     combatant_indices = {best_pair[0], best_pair[1]}
                 else:
                     compat_pairs = [
                         (i, j) for i in range(len(persons)) for j in range(i + 1, len(persons))
                         if geometry.are_depth_compatible(persons[i], persons[j])
+                        and not (geometry.is_passive_behind(persons[i], persons[j]) or geometry.is_passive_behind(persons[j], persons[i]))
                     ]
                     candidates_pool = compat_pairs if compat_pairs else [
                         (i, j) for i in range(len(persons)) for j in range(i + 1, len(persons))
+                        if geometry.are_depth_compatible(persons[i], persons[j])
                     ]
+                    if not candidates_pool:
+                        candidates_pool = [
+                            (i, j) for i in range(len(persons)) for j in range(i + 1, len(persons))
+                        ]
                     closest = min(
                         candidates_pool,
                         key=lambda pair: float(np.linalg.norm(persons[pair[0]].centroid - persons[pair[1]].centroid))

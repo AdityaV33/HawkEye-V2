@@ -226,7 +226,9 @@ class ActionClassifier:
                     p1 = persons[i]
                     for j in range(i + 1, len(persons)):
                         p2 = persons[j]
-                        if geometry.are_in_combat_range(p1, p2):
+                        if geometry.are_in_combat_range(p1, p2) and not (
+                            geometry.is_passive_behind(p1, p2) or geometry.is_passive_behind(p2, p1)
+                        ):
                             close_pair = True
                             break
                     if close_pair:

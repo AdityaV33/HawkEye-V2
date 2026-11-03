@@ -675,6 +675,59 @@ def test_distant_background_spectator_cannot_be_combatant():
     print("  ✓ distant background spectator is rejected by depth geometry and stays bystander")
 
 
+def test_passive_person_behind_cannot_be_combatant():
+    from hawkeye.config import DetectConfig
+    from hawkeye.detect.stage_a import StageA
+    from hawkeye.detect import geometry
+    from hawkeye.detect.skeleton_features import select_actors
+    from hawkeye.detect.pose import NOSE
+    from hawkeye.events.schema import AnomalyType, StageAEvent
+
+    # Fighter A in foreground facing right towards Fighter B
+    fighter_a = make_person(200, 300, h=200.0, w=70.0, arms_up=True)
+    fighter_a.keypoints[NOSE] = (215.0, 300 - 200 * 0.45, 0.9)  # nose shifted right
+
+    # Fighter B in foreground facing left towards Fighter A
+    fighter_b = make_person(360, 300, h=200.0, w=70.0, arms_up=True)
+    fighter_b.keypoints[NOSE] = (345.0, 300 - 200 * 0.45, 0.9)  # nose shifted left
+
+    # Bystander standing passively behind Fighter A (arms hanging down at sides)
+    bystander_behind = make_person(140, 300, h=190.0, w=65.0, arms_up=False)
+
+    # 1. Orientation check: bystander is behind Fighter A's back
+    assert geometry.is_passive_behind(fighter_a, bystander_behind), (
+        "passive bystander behind fighter was not recognized as behind"
+    )
+    assert not geometry.is_passive_behind(fighter_a, fighter_b), (
+        "fighter B facing fighter A was mistakenly classified as behind"
+    )
+
+    # 2. Combat pair scoring: fighter_a vs fighter_b is valid; bystander_behind is disqualified
+    assert geometry.score_combat_pair(fighter_a, fighter_b) > 0.0, (
+        "two active fighters were disqualified from combat pair"
+    )
+    assert geometry.score_combat_pair(fighter_a, bystander_behind) == -1.0, (
+        "passive bystander behind fighter got positive combat pair score"
+    )
+
+    # 3. Actor selection: Fighter B must be chosen as Actor B, NOT the bystander behind
+    a, b = select_actors([fighter_a, bystander_behind, fighter_b])
+    assert {id(a), id(b)} == {id(fighter_a), id(fighter_b)}, (
+        f"select_actors picked bystander behind: a={a}, b={b}"
+    )
+
+    # 4. Stage A drawing: only fighter_a and fighter_b get combatant treatment
+    stage_a = StageA(DetectConfig())
+    frame = np.zeros((480, 640, 3), dtype=np.uint8)
+    event = StageAEvent(
+        frame_id=1, ts=1.0, anomaly_type=AnomalyType.VIOLENCE, score=0.85,
+        motion_score=0.4, person_count=3, boxes=[], triggered=True, reason="fight",
+    )
+    annotated = stage_a._draw(frame, [fighter_a, bystander_behind, fighter_b], [], event)
+    assert annotated is not None
+    print("  ✓ passive person behind fighter is excluded from combatants")
+
+
 def test_draw_violence_combatants_and_bystanders():
     from hawkeye.config import DetectConfig
     from hawkeye.detect.stage_a import StageA
@@ -718,6 +771,7 @@ def main() -> int:
         test_weapon_precedence_over_violence,
         test_checkpoint_roundtrip_through_live_wrapper,
         test_distant_background_spectator_cannot_be_combatant,
+        test_passive_person_behind_cannot_be_combatant,
         test_draw_violence_combatants_and_bystanders,
     ]
     print(f"Running {len(checks)} pipeline self-checks...\n")

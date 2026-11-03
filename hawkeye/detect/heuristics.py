@@ -205,6 +205,9 @@ def analyze(persons: List[PersonDetection], motion_score: float,
                 # Reject distant spectators or people outside physical reach
                 if not geometry.are_in_combat_range(p1, p2):
                     continue
+                # Reject passive bystanders standing behind someone
+                if geometry.is_passive_behind(p1, p2) or geometry.is_passive_behind(p2, p1):
+                    continue
 
                 iou = geometry.box_iou(p1.box, p2.box)
                 prox = geometry.proximity(p1, p2)

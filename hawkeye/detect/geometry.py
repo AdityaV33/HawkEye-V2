@@ -18,8 +18,8 @@ from typing import Optional
 
 import numpy as np
 
-from .pose import (L_ANKLE, L_HIP, L_KNEE, L_SHOULDER, L_WRIST,
-                   R_ANKLE, R_HIP, R_KNEE, R_SHOULDER, R_WRIST, PersonDetection)
+from .pose import (L_ANKLE, L_ELBOW, L_HIP, L_KNEE, L_SHOULDER, L_WRIST, NOSE,
+                   R_ANKLE, R_ELBOW, R_HIP, R_KNEE, R_SHOULDER, R_WRIST, PersonDetection)
 
 
 def mid(a, b):
@@ -97,6 +97,84 @@ def are_in_combat_range(p1: PersonDetection, p2: PersonDetection) -> bool:
     gap = box_gap(p1, p2)
     iou = box_iou(p1.box, p2.box)
     return (iou >= 0.05) or ((gap <= 0.55 * scale) and (dist <= 1.25 * scale))
+
+
+def combat_posture(p: PersonDetection) -> float:
+    """Score in [0, 1] indicating active fighting / striking guard posture.
+
+    Distinguishes fighters (fists raised at chin/chest/head level with bent elbows)
+    from passive bystanders/referees (arms hanging straight down at hips/thighs).
+    """
+    sh_y_pts = [p.kp(i)[1] for i in (L_SHOULDER, R_SHOULDER) if p.kp(i) is not None]
+    hip_y_pts = [p.kp(i)[1] for i in (L_HIP, R_HIP) if p.kp(i) is not None]
+    if not sh_y_pts or not hip_y_pts:
+        return aggressive_pose(p)
+    sh_y = float(np.mean(sh_y_pts))
+    hip_y = float(np.mean(hip_y_pts))
+    torso_len = max(hip_y - sh_y, 10.0)
+
+    scores = []
+    for wi, ei, si in ((L_WRIST, L_ELBOW, L_SHOULDER), (R_WRIST, R_ELBOW, R_SHOULDER)):
+        w, e, s = p.kp(wi), p.kp(ei), p.kp(si)
+        if w is not None and np.linalg.norm(w) >= 1.0:
+            # How far is wrist raised above hips towards or above shoulders
+            # 0.0 = at or below hips; 1.0 = at or above shoulders
+            raised = float(np.clip((hip_y - w[1]) / torso_len, 0.0, 1.2))
+
+            # Elbow flexion: bent arm in guard (<110 deg) vs hanging straight down (>150 deg)
+            bent = 0.5
+            if (e is not None and np.linalg.norm(e) >= 1.0 and
+                    s is not None and np.linalg.norm(s) >= 1.0):
+                v1 = s - e
+                v2 = w - e
+                cos_ang = np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2) + 1e-6)
+                angle = float(np.degrees(np.arccos(np.clip(cos_ang, -1.0, 1.0))))
+                bent = float(np.clip((155.0 - angle) / 65.0, 0.0, 1.0))
+            scores.append(float(raised * (0.5 + 0.5 * bent)))
+
+    return float(np.mean(scores)) if scores else 0.0
+
+
+def is_passive_behind(p_front: PersonDetection, p_other: PersonDetection) -> bool:
+    """Return True if p_other is passively standing behind p_front (facing away)."""
+    nose = p_front.kp(NOSE)
+    sh_mid = mid(p_front.kp(L_SHOULDER), p_front.kp(R_SHOULDER))
+    hip_mid = mid(p_front.kp(L_HIP), p_front.kp(R_HIP))
+    ref = hip_mid if hip_mid is not None else sh_mid
+    if nose is None or ref is None:
+        return False
+    face_dx = float(nose[0] - ref[0])
+    if abs(face_dx) < 5.0:
+        return False
+    vec_to_other = float(p_other.centroid[0] - p_front.centroid[0])
+    # If p_front faces away from p_other and p_other has low combat posture and negligible overlap
+    if (face_dx * vec_to_other < 0) and abs(vec_to_other) > 15:
+        if combat_posture(p_other) < 0.25 and box_iou(p_front.box, p_other.box) < 0.10:
+            return True
+    return False
+
+
+def score_combat_pair(p1: PersonDetection, p2: PersonDetection) -> float:
+    """Compute interaction combat score between two individuals.
+
+    Returns a positive score for active combat pairs, or -1.0 if disqualified
+    (different depth plane, out of reach, or a passive bystander standing behind).
+    """
+    if not are_depth_compatible(p1, p2):
+        return -1.0
+    if not are_in_combat_range(p1, p2):
+        return -1.0
+    if is_passive_behind(p1, p2) or is_passive_behind(p2, p1):
+        return -1.0
+
+    iou = box_iou(p1.box, p2.box)
+    prox = proximity(p1, p2)
+    closeness = max(iou, prox)
+    cp1 = combat_posture(p1)
+    cp2 = combat_posture(p2)
+    pair_combat = max(cp1, cp2) * 0.6 + min(cp1, cp2) * 0.4
+    sr = scale_ratio(p1, p2)
+    return float(0.35 * closeness + 0.40 * pair_combat + 0.25 * sr)
 
 
 def torso_horizontalness(sh, hip) -> Optional[float]:
