@@ -245,10 +245,10 @@ class ActionClassifier:
                     continue
 
                 # Physical fights require active scene motion. If motion is below the threshold,
-                # suppress violence unless both people exhibit distinct aggressive combat postures.
+                # suppress violence unless someone exhibits a clear aggressive combat posture.
                 if motion < self.violence_motion_min:
                     agg_count = sum(1 for p in persons if geometry.aggressive_pose(p) > 0.5)
-                    if agg_count < 2 or motion < 0.10:
+                    if agg_count < 1 or motion < 0.08:
                         continue
             elif atype == AnomalyType.FALL:
                 # A fall can ONLY apply to humans: reject if no persons are in the scene

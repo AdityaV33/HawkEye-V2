@@ -56,7 +56,7 @@ class DetectConfig(BaseModel):
     # thresholds fitted at a target precision, which take precedence over this.
     action_min_conf: float = 0.5
     fall_action_min_conf: float = 0.6
-    violence_action_min_conf: float = 0.75
+    violence_action_min_conf: float = 0.70
     # Transitional falls have a lower floor because pose keypoints can be
     # incomplete while the person is still rotating toward the ground.
     fall_trigger_threshold: float = 0.44
@@ -69,10 +69,10 @@ class DetectConfig(BaseModel):
     # Suppress a VIOLENCE verdict when 2+ people are close/overlapping but
     # scene motion is below this threshold (e.g. two calm people touching,
     # standing still, or hugging) -- see hawkeye/detect/action_classifier.py.
-    violence_motion_min: float = 0.20
+    violence_motion_min: float = 0.15
     # Heuristic violence requires stronger interaction evidence than the
     # trained model because screen content can create large motion spikes.
-    violence_trigger_threshold: float = 0.75
+    violence_trigger_threshold: float = 0.70
     person_conf: float = 0.35
     trigger_threshold: float = 0.55
     motion_weight: float = 0.35

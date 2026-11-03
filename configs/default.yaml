@@ -56,16 +56,16 @@ detect:
   # Slightly more sensitive than the checkpoint's conservative fall threshold;
   # physical posture guards still reject upright people.
   fall_action_min_conf: 0.60
-  # Calibration floor for violence detection (requires high confidence to suppress calm contact)
-  violence_action_min_conf: 0.75
+  # Calibration floor for violence detection (calibrated for high precision while catching real fights)
+  violence_action_min_conf: 0.70
   # Transitional falls can have incomplete leg keypoints and score below the
   # general anomaly floor; their separate geometry/motion guards remain active.
   fall_trigger_threshold: 0.44
   # Suppress VIOLENCE when 2+ people are close/overlapping but scene motion is
   # below this threshold (e.g. calm contact, hugging, handshakes). A genuine
   # fight creates active, sustained physical motion across the pair.
-  violence_motion_min: 0.20              # requires active kinetic motion to eliminate calm contact false alarms
-  violence_trigger_threshold: 0.75       # heuristic fallback floor for police-worthy violence
+  violence_motion_min: 0.15              # calibrated sensitivity: catches shoves & strikes while filtering calm dialogue
+  violence_trigger_threshold: 0.70       # heuristic fallback floor for police-worthy violence
   action_stride: 2
   # A class must clear its threshold on `hits` of the last `window` inference
   # ticks before it is reported. Raise `hits` if you still see brief flickers;
