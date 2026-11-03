@@ -53,14 +53,12 @@ detect:
   # Fallback confidence floor only. A trained checkpoint carries per-class
   # thresholds fitted on validation data at a target precision, and those win.
   action_min_conf: 0.50                  # lowered from 0.60 — fallback floor for classes without a checkpoint threshold
-  # Slightly more sensitive than the checkpoint's conservative fall threshold;
-  # physical posture guards still reject upright people.
-  fall_action_min_conf: 0.60
+  # Confidence floor for fall action detection
+  fall_action_min_conf: 0.65
   # Calibration floor for violence detection (calibrated for high precision while catching real fights)
   violence_action_min_conf: 0.65
-  # Transitional falls can have incomplete leg keypoints and score below the
-  # general anomaly floor; their separate geometry/motion guards remain active.
-  fall_trigger_threshold: 0.44
+  # Trigger threshold for confirmed fall alerts
+  fall_trigger_threshold: 0.65
   # Suppress VIOLENCE when 2+ people are close/overlapping but scene motion is
   # below this threshold (e.g. calm contact, hugging, handshakes). A genuine
   # fight creates active, sustained physical motion across the pair.

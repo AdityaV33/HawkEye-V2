@@ -162,14 +162,10 @@ class ActionClassifier:
             default = self.min_conf
 
         checkpoint_threshold = self._thresholds.get(label)
-        if lab == "violence" and default > 0:
+        if lab in ("violence", "fall") and default > 0:
             return float(default)
         if checkpoint_threshold is None:
             return float(default)
-        # Permit a deployment-specific sensitivity override for falls while
-        # retaining the checkpoint calibration for normal actions.
-        if lab == "fall":
-            return float(min(checkpoint_threshold, default))
         return float(checkpoint_threshold)
 
     def _infer(self) -> List[Candidate]:

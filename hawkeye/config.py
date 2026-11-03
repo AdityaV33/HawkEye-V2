@@ -55,11 +55,9 @@ class DetectConfig(BaseModel):
     # Fallback confidence floor. A trained checkpoint carries per-class
     # thresholds fitted at a target precision, which take precedence over this.
     action_min_conf: float = 0.5
-    fall_action_min_conf: float = 0.6
+    fall_action_min_conf: float = 0.65
     violence_action_min_conf: float = 0.65
-    # Transitional falls have a lower floor because pose keypoints can be
-    # incomplete while the person is still rotating toward the ground.
-    fall_trigger_threshold: float = 0.44
+    fall_trigger_threshold: float = 0.65
     action_stride: int = 2           # run the action net every N frames (perf)
     # Temporal hysteresis: a class must clear its threshold on `hits` of the last
     # `window` inference ticks before it is emitted. One window crossing a
