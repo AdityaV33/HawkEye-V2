@@ -728,6 +728,51 @@ def test_passive_person_behind_cannot_be_combatant():
     print("  ✓ passive person behind fighter is excluded from combatants")
 
 
+def test_background_crowd_spectators_cannot_be_combatants():
+    from hawkeye.config import DetectConfig
+    from hawkeye.detect.stage_a import StageA
+    from hawkeye.detect import geometry
+    from hawkeye.detect.skeleton_features import select_actors
+    from hawkeye.events.schema import AnomalyType, StageAEvent
+
+    # Two foreground fighters squaring off at striking range (h=200, gap=100px)
+    fighter_a = make_person(200, 300, h=200.0, w=70.0, arms_up=True)
+    fighter_b = make_person(350, 300, h=200.0, w=70.0, arms_up=True)
+
+    # Two spectators standing shoulder-to-shoulder in the background audience crowd
+    crowd_1 = make_person(60, 80, h=45.0, w=35.0, arms_up=False)
+    crowd_2 = make_person(95, 80, h=45.0, w=35.0, arms_up=False)
+
+    max_h = 200.0
+
+    # 1. Crowd members shoulder-to-shoulder must be disqualified when dominant foreground fighters exist
+    assert geometry.score_combat_pair(crowd_1, crowd_2, max_scene_h=max_h) == -1.0, (
+        "crowd spectators shoulder to shoulder were accepted as combat pair"
+    )
+
+    # 2. Foreground fighters must be accepted in combat range and scored positively
+    assert geometry.score_combat_pair(fighter_a, fighter_b, max_scene_h=max_h) > 0.0, (
+        "foreground fighters at striking range were rejected from combat pair"
+    )
+
+    # 3. Actor selection must choose the two fighters, completely ignoring the audience crowd
+    a, b = select_actors([fighter_a, crowd_1, crowd_2, fighter_b])
+    assert {id(a), id(b)} == {id(fighter_a), id(fighter_b)}, (
+        f"select_actors selected crowd member instead of fighter: a={a}, b={b}"
+    )
+
+    # 4. Stage A drawing: fighters are combatants, audience members stay green bystanders
+    stage_a = StageA(DetectConfig())
+    frame = np.zeros((480, 640, 3), dtype=np.uint8)
+    event = StageAEvent(
+        frame_id=1, ts=1.0, anomaly_type=AnomalyType.VIOLENCE, score=0.85,
+        motion_score=0.4, person_count=4, boxes=[], triggered=True, reason="fight",
+    )
+    annotated = stage_a._draw(frame, [fighter_a, crowd_1, crowd_2, fighter_b], [], event)
+    assert annotated is not None
+    print("  ✓ background crowd spectators are excluded and stay bystanders")
+
+
 def test_draw_violence_combatants_and_bystanders():
     from hawkeye.config import DetectConfig
     from hawkeye.detect.stage_a import StageA
@@ -772,6 +817,7 @@ def main() -> int:
         test_checkpoint_roundtrip_through_live_wrapper,
         test_distant_background_spectator_cannot_be_combatant,
         test_passive_person_behind_cannot_be_combatant,
+        test_background_crowd_spectators_cannot_be_combatants,
         test_draw_violence_combatants_and_bystanders,
     ]
     print(f"Running {len(checks)} pipeline self-checks...\n")

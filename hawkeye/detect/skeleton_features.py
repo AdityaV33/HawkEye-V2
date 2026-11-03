@@ -200,17 +200,20 @@ def select_actors(persons: Sequence[PersonDetection]
                   ) -> Tuple[Optional[PersonDetection], Optional[PersonDetection]]:
     """Pick actor A (most salient) and actor B (A's combat partner or nearest neighbor).
 
-    B prioritizes active combat partners over passive bystanders standing behind A.
+    B prioritizes active combat partners over passive bystanders standing behind A,
+    and rejects distant audience/crowd spectators when prominent foreground actors exist.
     """
     if not persons:
         return None, None
     a = max(persons, key=_salience)
-    others = [p for p in persons if p is not a]
+    # Exclude tiny background crowd members (h < 0.45 * a.height)
+    others = [p for p in persons if p is not a and (p.height >= 0.45 * a.height)]
     if not others:
         return a, None
 
+    max_h = max(p.height for p in persons)
     # Check for active combat partners first
-    combat_candidates = [(p, geometry.score_combat_pair(a, p)) for p in others]
+    combat_candidates = [(p, geometry.score_combat_pair(a, p, max_scene_h=max_h)) for p in others]
     valid_combat = [item for item in combat_candidates if item[1] > 0]
     if valid_combat:
         b = max(valid_combat, key=lambda item: item[1])[0]

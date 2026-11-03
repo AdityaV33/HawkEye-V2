@@ -340,41 +340,21 @@ class StageA:
         # In a group of people, flash only the single active fighting pair (at most 2 people) at any instance.
         combatant_indices = set()
         if scene_violence and len(persons) >= 2:
+            max_h = max(p.height for p in persons)
             if len(persons) == 2:
-                if geometry.score_combat_pair(persons[0], persons[1]) > 0:
+                if geometry.score_combat_pair(persons[0], persons[1], max_scene_h=max_h) > 0:
                     combatant_indices = {0, 1}
-                else:
-                    combatant_indices = {0 if persons[0].height >= persons[1].height else 1}
             else:
                 best_score = -1.0
                 best_pair = None
                 for i in range(len(persons)):
                     for j in range(i + 1, len(persons)):
-                        s = geometry.score_combat_pair(persons[i], persons[j])
+                        s = geometry.score_combat_pair(persons[i], persons[j], max_scene_h=max_h)
                         if s > best_score:
                             best_score = s
                             best_pair = (i, j)
                 if best_pair is not None and best_score > 0:
                     combatant_indices = {best_pair[0], best_pair[1]}
-                else:
-                    compat_pairs = [
-                        (i, j) for i in range(len(persons)) for j in range(i + 1, len(persons))
-                        if geometry.are_depth_compatible(persons[i], persons[j])
-                        and not (geometry.is_passive_behind(persons[i], persons[j]) or geometry.is_passive_behind(persons[j], persons[i]))
-                    ]
-                    candidates_pool = compat_pairs if compat_pairs else [
-                        (i, j) for i in range(len(persons)) for j in range(i + 1, len(persons))
-                        if geometry.are_depth_compatible(persons[i], persons[j])
-                    ]
-                    if not candidates_pool:
-                        candidates_pool = [
-                            (i, j) for i in range(len(persons)) for j in range(i + 1, len(persons))
-                        ]
-                    closest = min(
-                        candidates_pool,
-                        key=lambda pair: float(np.linalg.norm(persons[pair[0]].centroid - persons[pair[1]].centroid))
-                    )
-                    combatant_indices = {closest[0], closest[1]}
 
         for p_idx, p in enumerate(persons):
             x1, y1, x2, y2 = map(int, p.box)

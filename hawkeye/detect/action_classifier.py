@@ -219,16 +219,13 @@ class ActionClassifier:
                 if len(persons) < 2:
                     continue
 
-                # Multi-person proximity guard: fighting people must be within physical reach / combat range.
-                # Distant background spectators or people across the room are not engaged in physical violence.
+                # Multi-person proximity guard: fighting people must be an active combat pair in reach.
+                # Distant crowd spectators, passive bystanders behind someone, or people across the room are excluded.
                 close_pair = False
+                max_h = max(p.height for p in persons)
                 for i in range(len(persons)):
-                    p1 = persons[i]
                     for j in range(i + 1, len(persons)):
-                        p2 = persons[j]
-                        if geometry.are_in_combat_range(p1, p2) and not (
-                            geometry.is_passive_behind(p1, p2) or geometry.is_passive_behind(p2, p1)
-                        ):
+                        if geometry.score_combat_pair(persons[i], persons[j], max_scene_h=max_h) > 0:
                             close_pair = True
                             break
                     if close_pair:
