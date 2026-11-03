@@ -18,12 +18,15 @@ from .pose import (ARM_EDGES, FACE_EDGES, L_ANKLE, L_ELBOW, L_HIP,
                    R_SHOULDER, R_WRIST, TORSO_EDGES, PersonDetection,
                    PoseDetector)
 from .scene_anomaly import MotionAnomaly
+from .fire import FIRE_KEYWORDS, FireDetection, FireDetector
 from .weapons import WEAPON_KEYWORDS, WeaponDetector
 
 log = logging.getLogger("hawkeye.detect.stage_a")
 
 # BGR colors
 GREEN, RED, YELLOW, WHITE, CYAN, ORANGE = (80, 220, 80), (60, 60, 235), (40, 210, 235), (240, 240, 240), (235, 200, 60), (0, 140, 255)
+PURPLE = (220, 50, 160)  # BGR for vibrant violet — used exclusively for violence alerts
+GREY = (160, 160, 160)    # BGR for smoke detections
 # Per-limb-group debug colors (BGR), used only when the person isn't in alert
 # state — an alert paints the whole skeleton red so it stays the dominant
 # signal. Chosen to be distinguishable from each other and from RED/GREEN/CYAN.
@@ -47,8 +50,19 @@ class StageA:
                                        cfg.action_hysteresis_window,
                                        cfg.action_hysteresis_hits)
         self.action.fall_min_conf = cfg.fall_action_min_conf
+        self.action.violence_min_conf = cfg.violence_action_min_conf
+        self.fire = FireDetector(
+            model_path=cfg.fire_model,
+            device=cfg.device,
+            conf=cfg.fire_conf,
+            smoke_conf=cfg.smoke_conf,
+            keywords=cfg.fire_labels or FIRE_KEYWORDS,
+            verify_chromatic=cfg.fire_verify_chromatic,
+            chromatic_fallback=cfg.fire_chromatic_fallback,
+        )
         self._last_trigger: Dict[str, float] = {}
         self._weapon_streak: int = 0
+        self._fire_streak: int = 0
 
     def load(self) -> "StageA":
         # Surface the resolved compute device (auto -> cuda/mps/cpu) so a
@@ -56,6 +70,7 @@ class StageA:
         log.info("Stage A device: %s (requested '%s')", self.pose.device, self.cfg.device)
         self.pose.load()
         self.weapons.load()
+        self.fire.load()
         if self.action.available:
             self.action.load()
             log.info("Stage A action source: TRAINED model (%s)", self.cfg.action_model)
@@ -81,15 +96,23 @@ class StageA:
 
         valid: List[WeaponDetection] = []
         for wd in weapon_dets:
-            if wd.conf >= self.weapon_standalone_conf:
-                valid.append(wd)
-                continue
-            if wd.conf < self.weapon_held_conf:
-                continue
             wx1, wy1, wx2, wy2 = wd.box
             w_w = max(1.0, wx2 - wx1)
             w_h = max(1.0, wy2 - wy1)
             w_area = w_w * w_h
+
+            # Check if this detection is merely an entire human body misclassified as a weapon
+            # A false-positive human box covers the full vertical and horizontal body (IoU >= 0.60, or h_w >= 0.80 ph and w_w >= 0.65 pw)
+            is_full_body_human_fp = False
+            for p in persons:
+                iou = geometry.box_iou(wd.box, p.box)
+                pw = max(1.0, p.box[2] - p.box[0])
+                ph = max(1.0, p.box[3] - p.box[1])
+                if iou >= 0.60 or (w_h >= 0.80 * ph and w_w >= 0.65 * pw and iou >= 0.35):
+                    is_full_body_human_fp = True
+                    break
+            if is_full_body_human_fp:
+                continue
 
             held_by_someone = False
             for p in persons:
@@ -118,7 +141,7 @@ class StageA:
                 if min_arm_dist is None:
                     continue
 
-                grasp_limit = 0.28 * p_scale   # Hand grasp reach radius
+                grasp_limit = 0.35 * p_scale   # Hand grasp reach radius
 
                 if min_arm_dist > grasp_limit:
                     continue
@@ -127,7 +150,7 @@ class StageA:
                 # Allow higher ratio (up to 2.5x) for long guns / rifles or half-body people
                 # when the weapon is directly touching or inside the wrist grasp.
                 p_area = max(1.0, pw * ph)
-                max_ratio = 2.5 if min_arm_dist <= 0.05 * p_scale else 0.85
+                max_ratio = 2.5 if min_arm_dist <= 0.08 * p_scale else 0.85
                 if (w_area / p_area) > max_ratio:
                     continue
 
@@ -149,7 +172,9 @@ class StageA:
                 held_by_someone = True
                 break
 
-            if held_by_someone:
+            if held_by_someone and wd.conf >= self.weapon_held_conf:
+                valid.append(wd)
+            elif wd.conf >= self.weapon_standalone_conf:
                 valid.append(wd)
         return valid
 
@@ -177,14 +202,36 @@ class StageA:
                                if c[0] == AnomalyType.FALL]
             model_falls = [c for c in model_candidates
                            if c[0] == AnomalyType.FALL]
+            # Safety net: preserve static fallen human detection even if motion is low.
+            # However, when a trained action classifier is active, its violence verdict
+            # is authoritative — do NOT fall back to crude 1-frame violence heuristics.
             if heuristic_falls and not model_falls:
                 candidates = heuristic_falls + [
                     c for c in model_candidates if c[0] != AnomalyType.VIOLENCE
                 ]
             else:
-                candidates = model_candidates or heuristic_candidates
+                candidates = model_candidates
         else:
             candidates = heuristic_candidates
+
+        # Invariant 1: Violence strictly requires at least 2 people.
+        # A single person in frame can NEVER be classified as violence.
+        if len(persons) < 2:
+            candidates = [c for c in candidates if c[0] != AnomalyType.VIOLENCE]
+
+        # Invariant 2: Ground / horizontal posture priority.
+        # If someone has fallen or is collapsed on the ground, prioritize FALL.
+        # Suppress VIOLENCE unless there are at least two other active standing individuals.
+        has_fallen = any(heuristics.fall_score(p) >= 0.40 for p in persons) or any(c[0] == AnomalyType.FALL for c in candidates)
+        if has_fallen:
+            upright_count = sum(1 for p in persons if heuristics.is_standing(p))
+            if upright_count < 2:
+                candidates = [c for c in candidates if c[0] != AnomalyType.VIOLENCE]
+            # Ensure the fall candidate is present if detected by heuristics
+            if heuristic_candidates and not any(c[0] == AnomalyType.FALL for c in candidates):
+                h_falls = [c for c in heuristic_candidates if c[0] == AnomalyType.FALL]
+                if h_falls:
+                    candidates = h_falls + candidates
 
         # Detect weapons with oversized-box rejection (cars, ceiling fans, walls)
         raw_weapons = self.weapons.detect(
@@ -207,10 +254,30 @@ class StageA:
             weapon_score = max(0.85, float(top))
             candidates.append((AnomalyType.WEAPON, weapon_score,
                                f"weapon detected ({weapon_dets[0].label}: {top:.0%})"))
+            # Invariant 3: Weapon precedence. An armed individual is a weapon alert,
+            # not a generic unarmed violence brawl.
+            candidates = [c for c in candidates if c[0] != AnomalyType.VIOLENCE]
 
-        # Fuse: WEAPON takes top priority if present; otherwise highest-scoring candidate wins.
+        # Fire detection (YOLO + chromatic verification or zero-weight chromatic fallback)
+        raw_fire = self.fire.detect(frame)
+        if raw_fire:
+            self._fire_streak += 1
+        else:
+            self._fire_streak = 0
+
+        fire_dets: List[FireDetection] = raw_fire if self._fire_streak >= self.cfg.fire_hysteresis_hits else []
+        if fire_dets:
+            top_fire = max(fd.conf for fd in fire_dets)
+            fire_score = max(0.88, float(top_fire))
+            candidates.append((AnomalyType.FIRE, fire_score,
+                               f"fire detected ({fire_dets[0].label}: {top_fire:.0%})"))
+
+        # Fuse: FIRE and WEAPON take top priority if present; otherwise highest-scoring candidate wins.
+        fire_cands = [c for c in candidates if c[0] == AnomalyType.FIRE]
         weapon_cands = [c for c in candidates if c[0] == AnomalyType.WEAPON]
-        if weapon_cands:
+        if fire_cands:
+            atype, cscore, reason = fire_cands[0]
+        elif weapon_cands:
             atype, cscore, reason = weapon_cands[0]
         elif candidates:
             atype, cscore, reason = max(candidates, key=lambda c: c[1])
@@ -222,7 +289,11 @@ class StageA:
 
         all_boxes = [BBox(x1=float(p.box[0]), y1=float(p.box[1]),
                           x2=float(p.box[2]), y2=float(p.box[3])) for p in persons]
-        if atype == AnomalyType.WEAPON and weapon_dets:
+        if atype == AnomalyType.FIRE and fire_dets:
+            for f in fire_dets:
+                all_boxes.append(BBox(x1=float(f.box[0]), y1=float(f.box[1]),
+                                      x2=float(f.box[2]), y2=float(f.box[3])))
+        elif atype == AnomalyType.WEAPON and weapon_dets:
             for w in weapon_dets:
                 all_boxes.append(BBox(x1=float(w.box[0]), y1=float(w.box[1]),
                                       x2=float(w.box[2]), y2=float(w.box[3])))
@@ -233,7 +304,7 @@ class StageA:
             boxes=all_boxes,
             triggered=triggered, reason=reason,
         )
-        annotated = self._draw(frame, persons, weapon_dets, event)
+        annotated = self._draw(frame, persons, weapon_dets, event, fire_dets=fire_dets)
         return event, annotated, persons
 
     def _maybe_trigger(self, atype: AnomalyType, score: float, ts: float) -> bool:
@@ -249,7 +320,8 @@ class StageA:
         return True
 
     # --- rendering ---
-    def _draw(self, frame, persons, weapon_dets, event: StageAEvent) -> np.ndarray:
+    def _draw(self, frame, persons, weapon_dets, event: StageAEvent,
+              fire_dets: Optional[List[FireDetection]] = None) -> np.ndarray:
         import cv2
 
         img = frame.copy()
@@ -262,11 +334,53 @@ class StageA:
         best_fall_p = max(persons, key=heuristics.fall_score) if persons else None
         scene_fall = (event.anomaly_type == AnomalyType.FALL and (alert or event.score >= 0.35))
         scene_weapon = (event.anomaly_type == AnomalyType.WEAPON or bool(weapon_dets))
+        scene_violence = (event.anomaly_type == AnomalyType.VIOLENCE and (alert or event.score >= 0.35))
 
-        for p in persons:
+        # Identify specific combatant participants during violence so bystanders stay green.
+        # In a group of people, flash only the single active fighting pair (at most 2 people) at any instance.
+        combatant_indices = set()
+        if scene_violence and len(persons) >= 2:
+            if len(persons) == 2:
+                if geometry.score_combat_pair(persons[0], persons[1]) > 0:
+                    combatant_indices = {0, 1}
+                else:
+                    combatant_indices = {0 if persons[0].height >= persons[1].height else 1}
+            else:
+                best_score = -1.0
+                best_pair = None
+                for i in range(len(persons)):
+                    for j in range(i + 1, len(persons)):
+                        s = geometry.score_combat_pair(persons[i], persons[j])
+                        if s > best_score:
+                            best_score = s
+                            best_pair = (i, j)
+                if best_pair is not None and best_score > 0:
+                    combatant_indices = {best_pair[0], best_pair[1]}
+                else:
+                    compat_pairs = [
+                        (i, j) for i in range(len(persons)) for j in range(i + 1, len(persons))
+                        if geometry.are_depth_compatible(persons[i], persons[j])
+                        and not (geometry.is_passive_behind(persons[i], persons[j]) or geometry.is_passive_behind(persons[j], persons[i]))
+                    ]
+                    candidates_pool = compat_pairs if compat_pairs else [
+                        (i, j) for i in range(len(persons)) for j in range(i + 1, len(persons))
+                        if geometry.are_depth_compatible(persons[i], persons[j])
+                    ]
+                    if not candidates_pool:
+                        candidates_pool = [
+                            (i, j) for i in range(len(persons)) for j in range(i + 1, len(persons))
+                        ]
+                    closest = min(
+                        candidates_pool,
+                        key=lambda pair: float(np.linalg.norm(persons[pair[0]].centroid - persons[pair[1]].centroid))
+                    )
+                    combatant_indices = {closest[0], closest[1]}
+
+        for p_idx, p in enumerate(persons):
             x1, y1, x2, y2 = map(int, p.box)
             f_score = heuristics.fall_score(p)
             is_fall = (f_score >= 0.38) or (scene_fall and p is best_fall_p and f_score >= 0.25)
+            is_combatant = (p_idx in combatant_indices)
 
             # Check if this person is holding a detected weapon
             is_holding_weapon = False
@@ -284,18 +398,21 @@ class StageA:
                 person_color = RED
                 person_label = "WEAPON"
             elif is_fall:
-                person_color = ORANGE
+                person_color = YELLOW
                 pct = int(max(f_score, event.score if scene_fall else 0.0) * 100)
                 person_label = f"FALL {pct}%" if pct > 0 else "FALLING"
-            elif alert:
+            elif scene_violence and is_combatant:
+                person_color = PURPLE
+                person_label = "VIOLENCE"
+            elif alert and not scene_violence:
                 person_color = RED
                 person_label = event.anomaly_type.value.upper()
             else:
                 person_color = GREEN
                 person_label = None
 
-            # Bounding box (thicker for alert/fall)
-            box_thick = 3 if (alert or is_fall) else 2
+            # Bounding box (thicker for alert/fall/violence)
+            box_thick = 3 if (alert or is_fall or (scene_violence and is_combatant)) else 2
             cv2.rectangle(img, (x1, y1), (x2, y2), person_color, box_thick)
 
             # Badge tag above head (or inside top if near image boundary)
@@ -312,9 +429,13 @@ class StageA:
                             cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 0, 0), 2)
 
             if is_fall:
-                # Falling state: bright orange skeleton
+                # Falling state: bright yellow skeleton
                 for a, b in FACE_EDGES + ARM_EDGES + LEG_EDGES + TORSO_EDGES:
-                    line(p.kp(a), p.kp(b), ORANGE, 3)
+                    line(p.kp(a), p.kp(b), YELLOW, 3)
+            elif scene_violence and is_combatant:
+                # Violence alert: uniform purple skeleton for combatants only
+                for a, b in FACE_EDGES + ARM_EDGES + LEG_EDGES + TORSO_EDGES:
+                    line(p.kp(a), p.kp(b), PURPLE, 2)
             elif alert:
                 # Other alert state: uniform red skeleton
                 for a, b in FACE_EDGES + ARM_EDGES + LEG_EDGES + TORSO_EDGES:
@@ -332,10 +453,10 @@ class StageA:
 
             neck = geometry.mid(p.kp(L_SHOULDER), p.kp(R_SHOULDER))
             hip_c = geometry.mid(p.kp(L_HIP), p.kp(R_HIP))
-            spine_color = ORANGE if is_fall else (RED if alert else SPINE_CLR)
+            spine_color = YELLOW if is_fall else (PURPLE if (scene_violence and is_combatant) else (RED if alert else SPINE_CLR))
             line(neck, hip_c, spine_color, 3)
 
-            joint_color = (0, 200, 255) if is_fall else (RED if alert else YELLOW)
+            joint_color = YELLOW if is_fall else (PURPLE if (scene_violence and is_combatant) else (RED if alert else YELLOW))
             for idx in range(17):
                 x, y, c = p.keypoints[idx]
                 if c >= 0.3:
@@ -348,6 +469,19 @@ class StageA:
             cv2.putText(img, f"WEAPON {w.conf:.2f}", (x1, max(0, y1 - 6)),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, RED, 2)
 
+        if fire_dets:
+            for f in fire_dets:
+                fx1, fy1, fx2, fy2 = map(int, f.box)
+                is_smoke = "smoke" in f.label.lower()
+                box_color = GREY if is_smoke else ORANGE
+                cv2.rectangle(img, (fx1, fy1), (fx2, fy2), box_color, 3)
+                flabel = f"{f.label.upper()} {f.conf:.0%}"
+                (tw, th), _ = cv2.getTextSize(flabel, cv2.FONT_HERSHEY_SIMPLEX, 0.55, 2)
+                f_by1 = max(0, fy1 - th - 8)
+                cv2.rectangle(img, (fx1, f_by1), (fx1 + tw + 8, fy1), box_color, -1)
+                cv2.putText(img, flabel, (fx1 + 4, fy1 - 4),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 0, 0), 2)
+
         self._draw_hud(img, event, cv2)
         return img
 
@@ -355,10 +489,14 @@ class StageA:
         h, w = img.shape[:2]
         cv2.rectangle(img, (0, 0), (w, 40), (25, 25, 25), -1)
         label = event.anomaly_type.value.upper()
-        if event.anomaly_type == AnomalyType.WEAPON:
+        if event.anomaly_type == AnomalyType.FIRE:
+            color = ORANGE
+        elif event.anomaly_type == AnomalyType.WEAPON:
             color = RED
         elif event.anomaly_type == AnomalyType.FALL and (event.triggered or event.score >= 0.35):
-            color = ORANGE
+            color = YELLOW
+        elif event.anomaly_type == AnomalyType.VIOLENCE and (event.triggered or event.score >= 0.35):
+            color = PURPLE
         elif event.triggered:
             color = RED
         else:

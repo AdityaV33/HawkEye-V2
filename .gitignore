@@ -19,14 +19,16 @@ data/datasets/
 data/evidence/
 data/*.db
 data/faces/
-models/*.pt
-!models/action_gru.pt
-!models/weapons.pt
-*.backup
 models/*.onnx
 models/*.engine
 models/weights/
+*.backup
 *.pt
+!models/action_gru.pt
+!models/weapons.pt
+!models/action_gru_custom.pt
+!models/weapons_custom.pt
+!models/fire.pt
 runs/
 *.mp4
 *.avi
@@ -45,3 +47,6 @@ runs/
 .ipynb_checkpoints/
 .niti/
 .claude/
+
+# --- Graphify cache ---
+graphify-out/cache/

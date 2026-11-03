@@ -58,7 +58,7 @@ export const anomalyMeta: Record<
   { icon: string; color: keyof Palette; label: string }
 > = {
   normal: { icon: 'checkmark-circle', color: 'green', label: 'Normal' },
-  violence: { icon: 'hand-left', color: 'red', label: 'Violence' },
+  violence: { icon: 'hand-left', color: 'purple', label: 'Violence' },
   robbery: { icon: 'cash', color: 'red', label: 'Robbery' },
   theft: { icon: 'bag-remove', color: 'amber', label: 'Theft' },
   weapon: { icon: 'alert', color: 'red', label: 'Weapon' },

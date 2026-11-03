@@ -33,6 +33,13 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+        sys.stderr.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
 from hawkeye.config import load_config           # noqa: E402
 from hawkeye.detect import StageA                 # noqa: E402
 from hawkeye.ingest import open_source            # noqa: E402

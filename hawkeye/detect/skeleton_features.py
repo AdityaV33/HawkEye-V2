@@ -198,10 +198,9 @@ def _person_posture(p: PersonDetection, frame_h: int) -> Tuple[np.ndarray, Optio
 
 def select_actors(persons: Sequence[PersonDetection]
                   ) -> Tuple[Optional[PersonDetection], Optional[PersonDetection]]:
-    """Pick actor A (most salient) and actor B (A's nearest neighbour).
+    """Pick actor A (most salient) and actor B (A's combat partner or nearest neighbor).
 
-    B is chosen by proximity rather than salience because the second actor that
-    matters is whoever A is *interacting with*, not whoever else is biggest.
+    B prioritizes active combat partners over passive bystanders standing behind A.
     """
     if not persons:
         return None, None
@@ -209,7 +208,21 @@ def select_actors(persons: Sequence[PersonDetection]
     others = [p for p in persons if p is not a]
     if not others:
         return a, None
-    b = min(others, key=lambda p: float(np.linalg.norm(p.centroid - a.centroid)))
+
+    # Check for active combat partners first
+    combat_candidates = [(p, geometry.score_combat_pair(a, p)) for p in others]
+    valid_combat = [item for item in combat_candidates if item[1] > 0]
+    if valid_combat:
+        b = max(valid_combat, key=lambda item: item[1])[0]
+        return a, b
+
+    # Fallback: depth-compatible candidates, excluding passive bystanders behind A
+    pool = [p for p in others if geometry.are_depth_compatible(a, p) and not geometry.is_passive_behind(a, p)]
+    if not pool:
+        pool = [p for p in others if geometry.are_depth_compatible(a, p)]
+    if not pool:
+        pool = others
+    b = min(pool, key=lambda p: float(np.linalg.norm(p.centroid - a.centroid)))
     return a, b
 
 

@@ -53,6 +53,13 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+        sys.stderr.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
 from hawkeye.detect.skeleton_features import (A_KP_OFF, A_KPC_OFF, A_VEL_OFF,  # noqa: E402
                                               B_KP_OFF, B_POSE_OFF, B_VEL_OFF,
                                               BASE_DIM, FEATURE_DIM, INTER_OFF,

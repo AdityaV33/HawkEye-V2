@@ -74,6 +74,7 @@ class ActionClassifier:
         self.device_pref = device
         self.min_conf = min_conf          # floor; per-class thresholds take precedence
         self.fall_min_conf = min_conf
+        self.violence_min_conf = 0.65
         self.infer_stride = max(1, infer_stride)
         self.violence_motion_min = violence_motion_min
         self.hysteresis_window = max(1, hysteresis_window)
@@ -152,14 +153,24 @@ class ActionClassifier:
 
     # --- internals ---
     def _threshold_for(self, label: str) -> float:
-        default = self.fall_min_conf if label.strip().lower() == "fall" else self.min_conf
+        lab = label.strip().lower()
+        if lab == "fall":
+            default = self.fall_min_conf
+        elif lab == "violence":
+            default = getattr(self, "violence_min_conf", self.min_conf)
+        else:
+            default = self.min_conf
+
         checkpoint_threshold = self._thresholds.get(label)
+        if lab == "violence" and default > 0:
+            return float(default)
         if checkpoint_threshold is None:
             return float(default)
         # Permit a deployment-specific sensitivity override for falls while
-        # retaining the checkpoint calibration for every other class.
-        return float(min(checkpoint_threshold, default) if label.strip().lower() == "fall"
-                     else checkpoint_threshold)
+        # retaining the checkpoint calibration for normal actions.
+        if lab == "fall":
+            return float(min(checkpoint_threshold, default))
+        return float(checkpoint_threshold)
 
     def _infer(self) -> List[Candidate]:
         import torch
@@ -204,13 +215,40 @@ class ActionClassifier:
         out: List[Candidate] = []
         for atype, conf, reason in candidates:
             if atype == AnomalyType.VIOLENCE:
-                # A fight needs two bodies and kinetic evidence. Two people
-                # standing calmly close together have neither.
+                # Fights strictly require at least 2 people. A single person is NEVER violence.
                 if len(persons) < 2:
                     continue
-                aggressive = any(geometry.aggressive_pose(p) > 0.5 for p in persons)
-                if motion < self.violence_motion_min and not aggressive:
+
+                # Multi-person proximity guard: fighting people must be within physical reach / combat range.
+                # Distant background spectators or people across the room are not engaged in physical violence.
+                close_pair = False
+                for i in range(len(persons)):
+                    p1 = persons[i]
+                    for j in range(i + 1, len(persons)):
+                        p2 = persons[j]
+                        if geometry.are_in_combat_range(p1, p2) and not (
+                            geometry.is_passive_behind(p1, p2) or geometry.is_passive_behind(p2, p1)
+                        ):
+                            close_pair = True
+                            break
+                    if close_pair:
+                        break
+                if not close_pair:
                     continue
+
+                # If any person in the scene is fallen / on the ground, suppress violence
+                # unless there are at least two other standing upright individuals actively in combat.
+                fallen_count = sum(1 for p in persons if heuristics.fall_score(p) >= 0.40)
+                upright_count = len(persons) - fallen_count
+                if fallen_count > 0 and upright_count < 2:
+                    continue
+
+                # Physical fights require active scene motion. If motion is below the threshold,
+                # suppress violence unless someone exhibits a clear aggressive combat posture.
+                if motion < self.violence_motion_min:
+                    agg_count = sum(1 for p in persons if geometry.aggressive_pose(p) > 0.5)
+                    if agg_count < 1 or motion < 0.08:
+                        continue
             elif atype == AnomalyType.FALL:
                 # A fall can ONLY apply to humans: reject if no persons are in the scene
                 if not persons:
@@ -235,17 +273,12 @@ class ActionClassifier:
                     if torso_horiz is not None and torso_horiz < 0.30:
                         continue
                     aspect = p.width / (p.height + 1e-6)
-                    lower_count = sum(
-                        1 for idx in range(11, 17)
-                        if p.kp(idx, min_conf=0.20) is not None
-                    )
-                    # Without leg geometry, a mildly wide upper-body crop is
-                    # not enough evidence of a fall; require a clear
-                    # horizontal full-body-shaped box.
-                    if leg_horiz is None and (lower_count < 2 or aspect < 1.25):
-                        continue
+                    # Without leg geometry, require confirmed horizontal torso and wide full-body aspect
+                    if leg_horiz is None:
+                        if torso_horiz is None or torso_horiz < 0.50 or aspect < 1.35:
+                            continue
                     if ((leg_horiz is not None and leg_horiz >= 0.30)
-                            or aspect >= 1.25):
+                            or (torso_horiz is not None and torso_horiz >= 0.50 and aspect >= 1.35)):
                         has_fallen_human = True
                         break
                 if not has_fallen_human:

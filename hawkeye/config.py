@@ -25,29 +25,38 @@ class DetectConfig(BaseModel):
     device: str = "auto"
     pose_model: str = "yolo11n-pose.pt"
     weapon_model: str = ""            # path to a trained weapon-detection YOLO
-    # The bundled one-class checkpoint needs a conservative confidence floor;
+    # The bundled checkpoint needs a conservative confidence floor;
     # low thresholds turn arbitrary screen regions into "Weapon" detections.
-    weapon_conf: float = 0.35
-    # Hand proximity is not enough to trust a one-class weapon checkpoint;
-    # held-object alerts need a higher confidence floor.
+    weapon_conf: float = 0.40
+    # Hand proximity is not enough to trust a weapon checkpoint;
+    # held-object alerts need a verified spatial reach and geometry.
     weapon_held_conf: float = 0.60
-    # A very high-confidence weapon can be flagged without a visible holder
-    # (for example, a knife lying alone in the camera view).
-    weapon_standalone_conf: float = 0.75
-    # Reject oversized bounding boxes taking more than this fraction of the frame (cars, walls, fans)
-    weapon_max_area_ratio: float = 0.15
+    # A clearly identified standalone weapon can be flagged without a visible holder
+    # (for example, a knife or gun lying alone on a table/counter).
+    weapon_standalone_conf: float = 0.65
+    # Reject oversized bounding boxes taking more than this fraction of the frame (cars, walls, ceilings)
+    weapon_max_area_ratio: float = 0.35
     # Reject floating weapon detections if no person is holding or standing near the object
     weapon_require_person: bool = True
     # Require weapon detection across N consecutive ticks to eliminate 1-frame noise
-    weapon_hysteresis_hits: int = 3
+    weapon_hysteresis_hits: int = 2
     # Class-label substrings that count as a weapon. Empty => use the built-in
     # default list (see detect/weapons.py WEAPON_KEYWORDS).
     weapon_labels: List[str] = Field(default_factory=list)
+    # Fire and smoke detection (Hybrid Approach C: YOLO + chromatic verification)
+    fire_model: str = ""              # path to a trained fire/smoke YOLO (e.g. models/fire.pt)
+    fire_conf: float = 0.75           # strict high confidence floor for fire detector (well above average)
+    smoke_conf: float = 0.83          # strict high confidence floor for smoke detector
+    fire_hysteresis_hits: int = 3     # consecutive frames required to trigger FIRE event
+    fire_verify_chromatic: bool = True # use chromatic & edge-flicker gate to reject screens/clothing
+    fire_chromatic_fallback: bool = True # run lightweight chromatic detector when fire_model is not present
+    fire_labels: List[str] = Field(default_factory=list) # optional override for fire class keywords
     action_model: str = ""           # path to a trained action classifier (scripts/train_action.py)
     # Fallback confidence floor. A trained checkpoint carries per-class
     # thresholds fitted at a target precision, which take precedence over this.
     action_min_conf: float = 0.5
     fall_action_min_conf: float = 0.6
+    violence_action_min_conf: float = 0.65
     # Transitional falls have a lower floor because pose keypoints can be
     # incomplete while the person is still rotating toward the ground.
     fall_trigger_threshold: float = 0.44
@@ -58,9 +67,9 @@ class DetectConfig(BaseModel):
     action_hysteresis_window: int = 3
     action_hysteresis_hits: int = 2
     # Suppress a VIOLENCE verdict when 2+ people are close/overlapping but
-    # neither scene motion nor an aggressive pose backs it up (e.g. two people
-    # standing still near the camera) -- see hawkeye/detect/action_classifier.py.
-    violence_motion_min: float = 0.18
+    # scene motion is below this threshold (e.g. two calm people touching,
+    # standing still, or hugging) -- see hawkeye/detect/action_classifier.py.
+    violence_motion_min: float = 0.15
     # Heuristic violence requires stronger interaction evidence than the
     # trained model because screen content can create large motion spikes.
     violence_trigger_threshold: float = 0.65
