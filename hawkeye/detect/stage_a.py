@@ -141,7 +141,7 @@ class StageA:
                 if min_arm_dist is None:
                     continue
 
-                grasp_limit = 0.35 * p_scale   # Hand grasp reach radius
+                grasp_limit = 0.22 * p_scale   # Hand grasp reach radius
 
                 if min_arm_dist > grasp_limit:
                     continue
@@ -370,11 +370,11 @@ class StageA:
                     w_box = w.box
                     dx = max(0, max(w_box[0] - x2, x1 - w_box[2]))
                     dy = max(0, max(w_box[1] - y2, y1 - w_box[3]))
-                    if float(np.hypot(dx, dy)) <= 0.35 * p_scale:
+                    if float(np.hypot(dx, dy)) <= 0.22 * p_scale:
                         is_holding_weapon = True
                         break
 
-            if is_holding_weapon or (alert and scene_weapon):
+            if is_holding_weapon:
                 person_color = RED
                 person_label = "WEAPON"
             elif is_fall:
@@ -384,7 +384,7 @@ class StageA:
             elif scene_violence and is_combatant:
                 person_color = PURPLE
                 person_label = "VIOLENCE"
-            elif alert and not scene_violence:
+            elif alert and not scene_violence and not scene_weapon:
                 person_color = RED
                 person_label = event.anomaly_type.value.upper()
             else:
