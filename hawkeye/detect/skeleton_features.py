@@ -198,15 +198,18 @@ def _person_posture(p: PersonDetection, frame_h: int) -> Tuple[np.ndarray, Optio
 
 def select_actors(persons: Sequence[PersonDetection]
                   ) -> Tuple[Optional[PersonDetection], Optional[PersonDetection]]:
-    """Pick actor A (most salient) and actor B (A's nearest neighbour).
+    """Pick actor A (most salient) and actor B (A's combat partner or nearest neighbor).
 
-    B is chosen by proximity rather than salience because the second actor that
-    matters is whoever A is *interacting with*, not whoever else is biggest.
+    B is chosen among depth-compatible candidates so a distant background spectator
+    (at a completely different depth) is not mistakenly chosen over the actual combatant
+    interacting with A.
     """
     if not persons:
         return None, None
     a = max(persons, key=_salience)
-    others = [p for p in persons if p is not a]
+    # Filter for candidates sharing approximately the same depth plane
+    depth_compat = [p for p in persons if p is not a and geometry.are_depth_compatible(a, p)]
+    others = depth_compat if depth_compat else [p for p in persons if p is not a]
     if not others:
         return a, None
     b = min(others, key=lambda p: float(np.linalg.norm(p.centroid - a.centroid)))

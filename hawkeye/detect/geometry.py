@@ -49,6 +49,56 @@ def proximity(p1: PersonDetection, p2: PersonDetection) -> float:
     return float(np.exp(-dist / scale))
 
 
+def scale_ratio(p1: PersonDetection, p2: PersonDetection) -> float:
+    """Ratio of smaller to larger person height in (0, 1]."""
+    min_h = min(p1.height, p2.height)
+    max_h = max(p1.height, p2.height) + 1e-6
+    return float(min_h / max_h)
+
+
+def foot_distance_ratio(p1: PersonDetection, p2: PersonDetection) -> float:
+    """Vertical difference in ground-contact (bottom of box) relative to height."""
+    max_h = max(p1.height, p2.height) + 1e-6
+    return float(abs(p1.box[3] - p2.box[3]) / max_h)
+
+
+def are_depth_compatible(p1: PersonDetection, p2: PersonDetection,
+                         min_scale_ratio: float = 0.58) -> bool:
+    """Return True if two people share approximately the same depth plane.
+
+    In perspective projection, objects at different depths (Z-axis) have different
+    apparent heights and ground contact Y positions. Two adults physically interacting
+    on the ground will have comparable height (scale ratio >= 0.58) and feet roughly
+    level with the ground plane (foot_diff <= 0.22, relaxed if heights are very close).
+    """
+    sr = scale_ratio(p1, p2)
+    foot_diff = foot_distance_ratio(p1, p2)
+    return (sr >= min_scale_ratio) and (foot_diff <= 0.22 or sr >= 0.75)
+
+
+def box_gap(p1: PersonDetection, p2: PersonDetection) -> float:
+    """Euclidean distance between the closest edges of two bounding boxes (0 if overlapping)."""
+    dx = max(0.0, max(p1.box[0] - p2.box[2], p2.box[0] - p1.box[2]))
+    dy = max(0.0, max(p1.box[1] - p2.box[3], p2.box[1] - p1.box[3]))
+    return float(math.hypot(dx, dy))
+
+
+def are_in_combat_range(p1: PersonDetection, p2: PersonDetection) -> bool:
+    """Return True if two people are physically capable of hand-to-hand or striking contact.
+
+    Must be depth-compatible (not a distant background spectator) and within reach:
+    either overlapping (IoU >= 0.05) or separated by less than arm/leg reach
+    (box edge gap <= 0.55 * scale and centroid dist <= 1.25 * scale).
+    """
+    if not are_depth_compatible(p1, p2):
+        return False
+    scale = (p1.height + p2.height) / 2.0 + 1e-6
+    dist = float(np.linalg.norm(p1.centroid - p2.centroid))
+    gap = box_gap(p1, p2)
+    iou = box_iou(p1.box, p2.box)
+    return (iou >= 0.05) or ((gap <= 0.55 * scale) and (dist <= 1.25 * scale))
+
+
 def torso_horizontalness(sh, hip) -> Optional[float]:
     """0 = upright, 1 = fully horizontal, from the shoulder->hip torso vector.
 

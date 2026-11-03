@@ -202,14 +202,11 @@ def analyze(persons: List[PersonDetection], motion_score: float,
             p1 = persons[i]
             for j in range(i + 1, len(persons)):
                 p2 = persons[j]
-                iou = geometry.box_iou(p1.box, p2.box)
-                dist = float(np.linalg.norm(p1.centroid - p2.centroid))
-                scale = (p1.height + p2.height) / 2.0 + 1e-6
-
-                # Physical reach constraint: people in separate thumbnail cards or distant cannot be fighting
-                if iou < 0.08 and dist > 0.65 * scale:
+                # Reject distant spectators or people outside physical reach
+                if not geometry.are_in_combat_range(p1, p2):
                     continue
 
+                iou = geometry.box_iou(p1.box, p2.box)
                 prox = geometry.proximity(p1, p2)
                 closeness = max(iou, prox)
                 aggro_1 = geometry.aggressive_pose(p1)

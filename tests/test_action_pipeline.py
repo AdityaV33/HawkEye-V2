@@ -626,6 +626,55 @@ def test_checkpoint_roundtrip_through_live_wrapper():
     print(f"  ✓ checkpoint round-trip through the live wrapper (peak |z| = {peak:.2f})")
 
 
+def test_distant_background_spectator_cannot_be_combatant():
+    from hawkeye.config import DetectConfig
+    from hawkeye.detect.stage_a import StageA
+    from hawkeye.detect import geometry
+    from hawkeye.detect.skeleton_features import select_actors
+    from hawkeye.events.schema import AnomalyType, StageAEvent
+
+    # Two fighters in foreground at roughly same depth (height=200, bottom y=400)
+    fighter_a = make_person(200, 300, h=200.0, w=70.0, arms_up=True)
+    fighter_b = make_person(360, 300, h=200.0, w=70.0, arms_up=True)
+
+    # Distant spectator standing far in the background directly behind fighter_a
+    # (height=95, bottom y=247.5, 2D centroid overlaps horizontally)
+    spectator = make_person(220, 200, h=95.0, w=35.0, arms_up=False)
+
+    # 1. Depth compatibility check
+    assert not geometry.are_depth_compatible(fighter_a, spectator), (
+        "distant background spectator was mistakenly considered depth compatible"
+    )
+    assert geometry.are_depth_compatible(fighter_a, fighter_b), (
+        "foreground fighters at same depth were rejected as incompatible"
+    )
+
+    # 2. Combat range check
+    assert not geometry.are_in_combat_range(fighter_a, spectator), (
+        "spectator far away in depth was considered in combat range"
+    )
+    assert geometry.are_in_combat_range(fighter_a, fighter_b), (
+        "fighters within striking reach were rejected from combat range"
+    )
+
+    # 3. Actor selection: spectator must NOT be selected as Actor B when fighter_b is present
+    a, b = select_actors([fighter_a, spectator, fighter_b])
+    assert {id(a), id(b)} == {id(fighter_a), id(fighter_b)}, (
+        f"select_actors selected background spectator instead of combatant: a={a}, b={b}"
+    )
+
+    # 4. Stage A drawing: only fighter_a and fighter_b get combatant treatment (purple)
+    stage_a = StageA(DetectConfig())
+    frame = np.zeros((480, 640, 3), dtype=np.uint8)
+    event = StageAEvent(
+        frame_id=1, ts=1.0, anomaly_type=AnomalyType.VIOLENCE, score=0.85,
+        motion_score=0.4, person_count=3, boxes=[], triggered=True, reason="fight",
+    )
+    annotated = stage_a._draw(frame, [fighter_a, spectator, fighter_b], [], event)
+    assert annotated is not None
+    print("  ✓ distant background spectator is rejected by depth geometry and stays bystander")
+
+
 def test_draw_violence_combatants_and_bystanders():
     from hawkeye.config import DetectConfig
     from hawkeye.detect.stage_a import StageA
@@ -668,6 +717,7 @@ def main() -> int:
         test_strict_violence_multi_person_and_ground_posture,
         test_weapon_precedence_over_violence,
         test_checkpoint_roundtrip_through_live_wrapper,
+        test_distant_background_spectator_cannot_be_combatant,
         test_draw_violence_combatants_and_bystanders,
     ]
     print(f"Running {len(checks)} pipeline self-checks...\n")

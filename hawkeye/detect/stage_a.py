@@ -341,7 +341,10 @@ class StageA:
         combatant_indices = set()
         if scene_violence and len(persons) >= 2:
             if len(persons) == 2:
-                combatant_indices = {0, 1}
+                if geometry.are_depth_compatible(persons[0], persons[1]):
+                    combatant_indices = {0, 1}
+                else:
+                    combatant_indices = {0 if persons[0].height >= persons[1].height else 1}
             else:
                 best_score = -1.0
                 best_pair = None
@@ -349,25 +352,34 @@ class StageA:
                     p1 = persons[i]
                     for j in range(i + 1, len(persons)):
                         p2 = persons[j]
+                        if not geometry.are_depth_compatible(p1, p2):
+                            continue
+                        if not geometry.are_in_combat_range(p1, p2):
+                            continue
                         iou = geometry.box_iou(p1.box, p2.box)
-                        dist = float(np.linalg.norm(p1.centroid - p2.centroid))
-                        scale = (p1.height + p2.height) / 2.0 + 1e-6
                         prox = geometry.proximity(p1, p2)
                         closeness = max(iou, prox)
                         agg1 = geometry.aggressive_pose(p1)
                         agg2 = geometry.aggressive_pose(p2)
                         pair_aggro = max(agg1, agg2)
-                        # Combat interaction score: mutual proximity + aggressive striking/guard posture
-                        pair_score = 0.55 * closeness + 0.45 * pair_aggro
-                        # Must be within physical reach
-                        if (iou >= 0.06 or dist <= 0.65 * scale) and pair_score > best_score:
+                        sr = geometry.scale_ratio(p1, p2)
+                        # Combat interaction score: mutual closeness + combat stance + depth alignment
+                        pair_score = 0.40 * closeness + 0.30 * pair_aggro + 0.30 * sr
+                        if pair_score > best_score:
                             best_score = pair_score
                             best_pair = (i, j)
                 if best_pair is not None:
                     combatant_indices = {best_pair[0], best_pair[1]}
                 else:
+                    compat_pairs = [
+                        (i, j) for i in range(len(persons)) for j in range(i + 1, len(persons))
+                        if geometry.are_depth_compatible(persons[i], persons[j])
+                    ]
+                    candidates_pool = compat_pairs if compat_pairs else [
+                        (i, j) for i in range(len(persons)) for j in range(i + 1, len(persons))
+                    ]
                     closest = min(
-                        ((i, j) for i in range(len(persons)) for j in range(i + 1, len(persons))),
+                        candidates_pool,
                         key=lambda pair: float(np.linalg.norm(persons[pair[0]].centroid - persons[pair[1]].centroid))
                     )
                     combatant_indices = {closest[0], closest[1]}
@@ -400,7 +412,7 @@ class StageA:
             elif scene_violence and is_combatant:
                 person_color = PURPLE
                 person_label = "VIOLENCE"
-            elif alert:
+            elif alert and not scene_violence:
                 person_color = RED
                 person_label = event.anomaly_type.value.upper()
             else:

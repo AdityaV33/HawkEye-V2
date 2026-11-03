@@ -219,17 +219,14 @@ class ActionClassifier:
                 if len(persons) < 2:
                     continue
 
-                # Multi-person proximity guard: fighting people must be in close contact / interacting.
-                # Two people far apart across the room or in separate thumbnails are not engaged in physical violence.
+                # Multi-person proximity guard: fighting people must be within physical reach / combat range.
+                # Distant background spectators or people across the room are not engaged in physical violence.
                 close_pair = False
                 for i in range(len(persons)):
                     p1 = persons[i]
                     for j in range(i + 1, len(persons)):
                         p2 = persons[j]
-                        iou = geometry.box_iou(p1.box, p2.box)
-                        dist = float(np.linalg.norm(p1.centroid - p2.centroid))
-                        scale = (p1.height + p2.height) / 2.0 + 1e-6
-                        if iou >= 0.08 or dist <= 0.65 * scale:
+                        if geometry.are_in_combat_range(p1, p2):
                             close_pair = True
                             break
                     if close_pair:
