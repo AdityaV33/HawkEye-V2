@@ -40,7 +40,7 @@ detect:
   # When the file is missing, the zero-weight chromatic & flicker fallback runs automatically.
   fire_model: "models/fire.pt"
   fire_conf: 0.75
-  smoke_conf: 0.75
+  smoke_conf: 0.83
   fire_hysteresis_hits: 3
   fire_verify_chromatic: true
   fire_chromatic_fallback: true

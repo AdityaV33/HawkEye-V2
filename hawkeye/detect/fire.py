@@ -37,7 +37,7 @@ class FireDetector:
         model_path: str = "",
         device: str = "auto",
         conf: float = 0.75,
-        smoke_conf: float = 0.75,
+        smoke_conf: float = 0.83,
         keywords: Sequence[str] = FIRE_KEYWORDS,
         verify_chromatic: bool = True,
         chromatic_fallback: bool = True,
