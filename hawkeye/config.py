@@ -30,10 +30,10 @@ class DetectConfig(BaseModel):
     weapon_conf: float = 0.40
     # Hand proximity is not enough to trust a weapon checkpoint;
     # held-object alerts need a verified spatial reach and geometry.
-    weapon_held_conf: float = 0.60
+    weapon_held_conf: float = 0.65
     # A clearly identified standalone weapon can be flagged without a visible holder
     # (for example, a knife or gun lying alone on a table/counter).
-    weapon_standalone_conf: float = 0.65
+    weapon_standalone_conf: float = 0.70
     # Reject oversized bounding boxes taking more than this fraction of the frame (cars, walls, ceilings)
     weapon_max_area_ratio: float = 0.35
     # Reject floating weapon detections if no person is holding or standing near the object
@@ -45,8 +45,8 @@ class DetectConfig(BaseModel):
     weapon_labels: List[str] = Field(default_factory=list)
     # Fire and smoke detection (Hybrid Approach C: YOLO + chromatic verification)
     fire_model: str = ""              # path to a trained fire/smoke YOLO (e.g. models/fire.pt)
-    fire_conf: float = 0.75           # strict high confidence floor for fire detector (well above average)
-    smoke_conf: float = 0.83          # strict high confidence floor for smoke detector
+    fire_conf: float = 0.67           # strict high confidence floor for fire detector (well above average)
+    smoke_conf: float = 0.67          # strict high confidence floor for smoke detector
     fire_hysteresis_hits: int = 3     # consecutive frames required to trigger FIRE event
     fire_verify_chromatic: bool = True # use chromatic & edge-flicker gate to reject screens/clothing
     fire_chromatic_fallback: bool = True # run lightweight chromatic detector when fire_model is not present
@@ -55,11 +55,9 @@ class DetectConfig(BaseModel):
     # Fallback confidence floor. A trained checkpoint carries per-class
     # thresholds fitted at a target precision, which take precedence over this.
     action_min_conf: float = 0.5
-    fall_action_min_conf: float = 0.6
+    fall_action_min_conf: float = 0.65
     violence_action_min_conf: float = 0.65
-    # Transitional falls have a lower floor because pose keypoints can be
-    # incomplete while the person is still rotating toward the ground.
-    fall_trigger_threshold: float = 0.44
+    fall_trigger_threshold: float = 0.65
     action_stride: int = 2           # run the action net every N frames (perf)
     # Temporal hysteresis: a class must clear its threshold on `hits` of the last
     # `window` inference ticks before it is emitted. One window crossing a
@@ -73,7 +71,7 @@ class DetectConfig(BaseModel):
     # Heuristic violence requires stronger interaction evidence than the
     # trained model because screen content can create large motion spikes.
     violence_trigger_threshold: float = 0.65
-    person_conf: float = 0.35
+    person_conf: float = 0.40
     trigger_threshold: float = 0.55
     motion_weight: float = 0.35
     clip_seconds: float = 3.0
@@ -94,7 +92,7 @@ class IdentityConfig(BaseModel):
     model_name: str = "buffalo_l"
     det_size: int = 640
     attendance_enabled: bool = True        # continuous face-recognition attendance
-    attendance_interval_sec: float = 3.0   # how often to scan the frame for members
+    attendance_interval_sec: float = 0.5   # how often to scan the frame for members (responsive)
 
 
 class DecisionConfig(BaseModel):

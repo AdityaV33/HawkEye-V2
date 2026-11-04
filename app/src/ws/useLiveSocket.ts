@@ -135,7 +135,7 @@ export function useLiveSocket() {
 
     const pushAttendance = (rec: AttendanceRecord) => {
       qc.setQueriesData<AttendanceRecord[]>({ queryKey: ['attendance'] }, (old: AttendanceRecord[] | undefined) => {
-        if (!old) return old;
+        if (!old) return [rec];
         const idx = old.findIndex((r: AttendanceRecord) => r.person_id === rec.person_id && r.date === rec.date);
         if (idx >= 0) {
           const next = old.slice();
@@ -144,6 +144,7 @@ export function useLiveSocket() {
         }
         return [rec, ...old];
       });
+      qc.invalidateQueries({ queryKey: ['attendance'] });
       toast.show(`${rec.name} marked present`, 'success', 'checkmark-circle');
     };
 

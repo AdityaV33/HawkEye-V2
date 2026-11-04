@@ -197,16 +197,14 @@ def analyze(persons: List[PersonDetection], motion_score: float,
 
     # --- Fight / violence (needs >=2 people close + motion) ---
     if len(persons) >= 2:
+        max_h = max(p.height for p in persons)
         best_violence = 0.0
         for i in range(len(persons)):
             p1 = persons[i]
             for j in range(i + 1, len(persons)):
                 p2 = persons[j]
-                # Reject distant spectators or people outside physical reach
-                if not geometry.are_in_combat_range(p1, p2):
-                    continue
-                # Reject passive bystanders standing behind someone
-                if geometry.is_passive_behind(p1, p2) or geometry.is_passive_behind(p2, p1):
+                # Reject distant crowd spectators, people outside combat reach, or bystanders behind
+                if geometry.score_combat_pair(p1, p2, max_scene_h=max_h) <= 0:
                     continue
 
                 iou = geometry.box_iou(p1.box, p2.box)

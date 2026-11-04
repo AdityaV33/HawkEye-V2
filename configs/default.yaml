@@ -11,7 +11,7 @@ ingest:
 detect:
   device: "auto"       # auto -> mps on Mac, cuda on the 3050, else cpu
   pose_model: "yolo11n-pose.pt"    # auto-downloaded by ultralytics on first run
-  person_conf: 0.35
+  person_conf: 0.40
   # Trained YOLO for guns/knives (see docs/training.md). The bundled checkpoint
   # is one-class, so use a conservative floor plus handheld/temporal gating.
   weapon_model: "models/weapons.pt"
@@ -20,10 +20,10 @@ detect:
   weapon_conf: 0.40
   # Held-object alerts use a calibrated floor so handheld weapons trigger reliably
   # while ropes, phones, and tools are filtered by spatial reach and geometry.
-  weapon_held_conf: 0.60
+  weapon_held_conf: 0.65
   # Allow clearly identified standalone weapons; lower-confidence detections
   # still require a verified person/hand relationship.
-  weapon_standalone_conf: 0.65
+  weapon_standalone_conf: 0.70
   # Reject oversized bounding boxes taking more than 35% of frame (cars, walls, room ceilings)
   weapon_max_area_ratio: 0.35
   # Suppress floating weapons when no person is holding or standing near the object
@@ -39,8 +39,8 @@ detect:
   # When set + present, YOLO proposes candidates and chromatic gating verifies them.
   # When the file is missing, the zero-weight chromatic & flicker fallback runs automatically.
   fire_model: "models/fire.pt"
-  fire_conf: 0.75
-  smoke_conf: 0.83
+  fire_conf: 0.67
+  smoke_conf: 0.67
   fire_hysteresis_hits: 3
   fire_verify_chromatic: true
   fire_chromatic_fallback: true
@@ -53,14 +53,12 @@ detect:
   # Fallback confidence floor only. A trained checkpoint carries per-class
   # thresholds fitted on validation data at a target precision, and those win.
   action_min_conf: 0.50                  # lowered from 0.60 — fallback floor for classes without a checkpoint threshold
-  # Slightly more sensitive than the checkpoint's conservative fall threshold;
-  # physical posture guards still reject upright people.
-  fall_action_min_conf: 0.60
+  # Confidence floor for fall action detection
+  fall_action_min_conf: 0.65
   # Calibration floor for violence detection (calibrated for high precision while catching real fights)
   violence_action_min_conf: 0.65
-  # Transitional falls can have incomplete leg keypoints and score below the
-  # general anomaly floor; their separate geometry/motion guards remain active.
-  fall_trigger_threshold: 0.44
+  # Trigger threshold for confirmed fall alerts
+  fall_trigger_threshold: 0.65
   # Suppress VIOLENCE when 2+ people are close/overlapping but scene motion is
   # below this threshold (e.g. calm contact, hugging, handshakes). A genuine
   # fight creates active, sustained physical motion across the pair.
@@ -93,7 +91,7 @@ identity:
   model_name: "buffalo_l"          # InsightFace pack: RetinaFace + ArcFace (512-d)
   det_size: 640
   attendance_enabled: true         # continuously log enrolled members seen on camera
-  attendance_interval_sec: 3.0     # scan cadence (seconds) — cheap, runs off the hot path
+  attendance_interval_sec: 0.5     # scan cadence (seconds) — responsive, marks present as soon as seen
 
 decision:
   confidence_min: 0.5              # ignore incidents below this reasoning confidence

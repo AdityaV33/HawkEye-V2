@@ -87,8 +87,8 @@ def are_in_combat_range(p1: PersonDetection, p2: PersonDetection) -> bool:
     """Return True if two people are physically capable of hand-to-hand or striking contact.
 
     Must be depth-compatible (not a distant background spectator) and within reach:
-    either overlapping (IoU >= 0.05) or separated by less than arm/leg reach
-    (box edge gap <= 0.55 * scale and centroid dist <= 1.25 * scale).
+    either overlapping (IoU >= 0.05) or separated by striking reach (gap <= 0.85 * scale
+    and centroid dist <= 1.35 * scale).
     """
     if not are_depth_compatible(p1, p2):
         return False
@@ -96,7 +96,7 @@ def are_in_combat_range(p1: PersonDetection, p2: PersonDetection) -> bool:
     dist = float(np.linalg.norm(p1.centroid - p2.centroid))
     gap = box_gap(p1, p2)
     iou = box_iou(p1.box, p2.box)
-    return (iou >= 0.05) or ((gap <= 0.55 * scale) and (dist <= 1.25 * scale))
+    return (iou >= 0.05) or ((gap <= 0.85 * scale) and (dist <= 1.35 * scale))
 
 
 def combat_posture(p: PersonDetection) -> float:
@@ -154,12 +154,17 @@ def is_passive_behind(p_front: PersonDetection, p_other: PersonDetection) -> boo
     return False
 
 
-def score_combat_pair(p1: PersonDetection, p2: PersonDetection) -> float:
+def score_combat_pair(p1: PersonDetection, p2: PersonDetection,
+                      max_scene_h: Optional[float] = None) -> float:
     """Compute interaction combat score between two individuals.
 
     Returns a positive score for active combat pairs, or -1.0 if disqualified
-    (different depth plane, out of reach, or a passive bystander standing behind).
+    (tiny background crowd spectators, different depth plane, out of reach,
+    or a passive bystander standing behind).
     """
+    # Reject tiny background crowd spectators when larger foreground actors are present
+    if max_scene_h is not None and max(p1.height, p2.height) < 0.50 * max_scene_h:
+        return -1.0
     if not are_depth_compatible(p1, p2):
         return -1.0
     if not are_in_combat_range(p1, p2):

@@ -127,13 +127,12 @@ def is_valid_human_detection(box: np.ndarray, kp: np.ndarray, min_kpt_conf: floa
 
 class PoseDetector:
     def __init__(self, model_path: str = "yolo11n-pose.pt", device: str = "auto",
-                 conf: float = 0.35):
+                 conf: float = 0.40):
         self.model_path = model_path
         self.device = resolve_device(device)
         self.conf = conf
-        # Run YOLO inference with a calibrated floor (0.28) to catch distant people,
-        # then strictly verify human anatomical structure on all candidates.
-        self.predict_conf = min(0.28, conf)
+        # Run YOLO inference with the configured confidence floor
+        self.predict_conf = conf
         self._model = None
 
     def load(self) -> "PoseDetector":
@@ -164,6 +163,8 @@ class PoseDetector:
                 continue
             box = boxes[i]
             cf = float(confs[i])
+            if cf < self.conf:
+                continue
             kp = kpts[i]
 
             # Require strict human anatomical structure on EVERY detection

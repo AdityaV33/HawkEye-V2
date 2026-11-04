@@ -54,7 +54,7 @@ export function useAttendance(date?: string) {
   return useQuery<AttendanceT[]>({
     queryKey: ['attendance', base, date ?? 'today'],
     queryFn: () => api.get(`/api/attendance${date ? `?date=${date}` : ''}`, AttendanceList),
-    staleTime: 10_000,
+    refetchInterval: 2_000,
   });
 }
 
@@ -125,6 +125,10 @@ export function useDeletePerson() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => api.del(`/api/people/${id}`, DeleteResult),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['people'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['people'] });
+      qc.invalidateQueries({ queryKey: ['attendance'] });
+      qc.invalidateQueries({ queryKey: ['status'] });
+    },
   });
 }

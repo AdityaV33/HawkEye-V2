@@ -19,7 +19,7 @@ from typing import List, Optional
 
 import numpy as np
 
-from .attendance import AttendanceStore
+from .attendance import AttendanceStore, date_str
 from .config import Config
 from .decision import DecisionEngine
 from .detect import StageA
@@ -293,15 +293,21 @@ class Pipeline:
             except Exception as e:
                 log.debug("Attendance scan failed: %s", e)
                 continue
+            now_ts = time.time()
             for m in matches:
                 if not (m.matched and m.person_id and m.name):
                     continue
-                newly = self.attendance.mark_seen(m.person_id, m.name)
+                newly = self.attendance.mark_seen(m.person_id, m.name, ts=now_ts)
                 if newly:
                     log.info("ATTENDANCE: %s marked present", m.name)
                     self.hub.push_attendance({
-                        "person_id": m.person_id, "name": m.name,
-                        "ts": time.time(), "similarity": m.similarity,
+                        "person_id": m.person_id,
+                        "name": m.name,
+                        "date": date_str(now_ts),
+                        "first_seen": now_ts,
+                        "last_seen": now_ts,
+                        "sightings": 1,
+                        "similarity": m.similarity,
                     })
             self.hub.set_status(present_today=self.attendance.present_count())
 
