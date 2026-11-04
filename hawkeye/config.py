@@ -45,8 +45,8 @@ class DetectConfig(BaseModel):
     weapon_labels: List[str] = Field(default_factory=list)
     # Fire and smoke detection (Hybrid Approach C: YOLO + chromatic verification)
     fire_model: str = ""              # path to a trained fire/smoke YOLO (e.g. models/fire.pt)
-    fire_conf: float = 0.73           # strict high confidence floor for fire detector (well above average)
-    smoke_conf: float = 0.73          # strict high confidence floor for smoke detector
+    fire_conf: float = 0.70           # strict high confidence floor for fire detector (well above average)
+    smoke_conf: float = 0.70          # strict high confidence floor for smoke detector
     fire_hysteresis_hits: int = 3     # consecutive frames required to trigger FIRE event
     fire_verify_chromatic: bool = True # use chromatic & edge-flicker gate to reject screens/clothing
     fire_chromatic_fallback: bool = True # run lightweight chromatic detector when fire_model is not present
@@ -71,7 +71,7 @@ class DetectConfig(BaseModel):
     # Heuristic violence requires stronger interaction evidence than the
     # trained model because screen content can create large motion spikes.
     violence_trigger_threshold: float = 0.65
-    person_conf: float = 0.35
+    person_conf: float = 0.40
     trigger_threshold: float = 0.55
     motion_weight: float = 0.35
     clip_seconds: float = 3.0

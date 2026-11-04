@@ -11,7 +11,7 @@ ingest:
 detect:
   device: "auto"       # auto -> mps on Mac, cuda on the 3050, else cpu
   pose_model: "yolo11n-pose.pt"    # auto-downloaded by ultralytics on first run
-  person_conf: 0.35
+  person_conf: 0.40
   # Trained YOLO for guns/knives (see docs/training.md). The bundled checkpoint
   # is one-class, so use a conservative floor plus handheld/temporal gating.
   weapon_model: "models/weapons.pt"
@@ -39,8 +39,8 @@ detect:
   # When set + present, YOLO proposes candidates and chromatic gating verifies them.
   # When the file is missing, the zero-weight chromatic & flicker fallback runs automatically.
   fire_model: "models/fire.pt"
-  fire_conf: 0.73
-  smoke_conf: 0.73
+  fire_conf: 0.70
+  smoke_conf: 0.70
   fire_hysteresis_hits: 3
   fire_verify_chromatic: true
   fire_chromatic_fallback: true
