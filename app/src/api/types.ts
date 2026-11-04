@@ -135,6 +135,15 @@ export const Health = z.object({
 });
 export type Health = z.infer<typeof Health>;
 
+export const CameraStatus = z.object({
+  current_source: z.string().default(''),
+  is_streaming: z.boolean().default(false),
+  lan_ip: z.string().default('127.0.0.1'),
+  port: z.number().default(8000),
+  connect_url: z.string().default(''),
+});
+export type CameraStatus = z.infer<typeof CameraStatus>;
+
 /** Discriminated ws text-event envelope. */
 export const WsEvent = z.discriminatedUnion('type', [
   z.object({ type: z.literal('incident'), data: Incident }),

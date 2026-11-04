@@ -14,6 +14,7 @@ import {
   Person,
   Status,
   Health,
+  CameraStatus,
 } from './types';
 // Names above are zod schemas *and* their inferred types (declaration merge),
 // so `Incident`, `Person`, etc. below are used as TS types.
@@ -22,6 +23,7 @@ type AttendanceT = AttendanceRecord;
 type PersonT = Person;
 type StatusT = Status;
 type HealthT = Health;
+type CameraStatusT = CameraStatus;
 
 const IncidentList = z.array(Incident);
 const AttendanceList = z.array(AttendanceRecord);
@@ -129,6 +131,29 @@ export function useDeletePerson() {
       qc.invalidateQueries({ queryKey: ['people'] });
       qc.invalidateQueries({ queryKey: ['attendance'] });
       qc.invalidateQueries({ queryKey: ['status'] });
+    },
+  });
+}
+
+const OkResult = z.object({ ok: z.boolean(), source: z.string().optional() });
+
+export function useCameraStatus() {
+  const base = useBaseKey();
+  return useQuery<CameraStatusT>({
+    queryKey: ['camera-status', base],
+    queryFn: () => api.get('/api/camera/status', CameraStatus),
+    refetchInterval: 3_000,
+  });
+}
+
+export function useSetCameraSource() {
+  const qc = useQueryClient();
+  const base = useBaseKey();
+  return useMutation({
+    mutationFn: (source: string) => api.post('/api/camera/source', { source }, OkResult),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['camera-status', base] });
+      qc.invalidateQueries({ queryKey: ['status', base] });
     },
   });
 }

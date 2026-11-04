@@ -327,6 +327,79 @@ async def ws(websocket: WebSocket):
         return
 
 
+def get_lan_ip() -> str:
+    import socket
+
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect(('10.255.255.255', 1))
+        ip = s.getsockname()[0]
+    except Exception:
+        ip = '127.0.0.1'
+    finally:
+        s.close()
+    return ip
+
+
+@app.get("/api/camera/status")
+async def camera_status():
+    from hawkeye.ingest.sources import PushStreamSource
+
+    push_source = PushStreamSource.get_instance()
+    current_source = app.state.cfg.ingest.source
+    lan_ip = get_lan_ip()
+    port = app.state.cfg.server.port or 8000
+    return {
+        "current_source": current_source,
+        "is_streaming": push_source.is_streaming(),
+        "lan_ip": lan_ip,
+        "port": port,
+        "connect_url": f"http://{lan_ip}:{port}",
+    }
+
+
+@app.post("/api/camera/source")
+async def set_camera_source(req: dict):
+    new_source = str(req.get("source", "")).strip()
+    if not new_source:
+        raise HTTPException(400, "Missing 'source' field")
+    app.state.pipeline.switch_source(new_source)
+    return {"ok": True, "source": new_source}
+
+
+@app.post("/api/camera/frame")
+async def post_camera_frame(file: UploadFile = File(...)):
+    from hawkeye.ingest.sources import PushStreamSource
+
+    push_source = PushStreamSource.get_instance()
+    if app.state.cfg.ingest.source != "phone":
+        app.state.pipeline.switch_source("phone")
+    data = await file.read()
+    ok = push_source.push_jpeg(data)
+    return {"ok": ok}
+
+
+@app.websocket("/ws/camera")
+async def ws_camera(websocket: WebSocket):
+    await websocket.accept()
+    log.info("Client camera stream connected")
+    from hawkeye.ingest.sources import PushStreamSource
+
+    push_source = PushStreamSource.get_instance()
+    app.state.pipeline.switch_source("phone")
+    try:
+        while True:
+            data = await websocket.receive_bytes()
+            if data:
+                push_source.push_jpeg(data)
+    except (WebSocketDisconnect, RuntimeError, ConnectionResetError, BrokenPipeError, asyncio.CancelledError):
+        pass
+    except Exception as e:
+        log.debug("Camera stream websocket exception: %s", e)
+    finally:
+        log.info("Client camera stream disconnected")
+
+
 # ── Static UI ────────────────────────────────────────────────────────────────
 # Mounted LAST so nothing above can be shadowed: /api/*, /ws and / are already
 # bound by the time these catch-alls are registered.

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 import threading
+import time
 from typing import Optional
 
 import numpy as np
@@ -251,6 +252,113 @@ class ScreenSource(VideoSource):
         return (self._is_wayland and self._running) or (self._dxcam is not None) or (self._sct is not None and self._running)
 
 
+class PushStreamSource(VideoSource):
+    """Real-time video source fed by a phone or browser client over WebSocket or HTTP."""
+    _instance: Optional["PushStreamSource"] = None
+
+    def __init__(self, spec: str = "phone", width: int = 960, height: int = 540):
+        super().__init__(spec, width, height)
+        self._lock = threading.Lock()
+        self._latest_frame: Optional[np.ndarray] = None
+        self._new_frame_evt = threading.Event()
+        self._last_push_ts: float = 0.0
+        self._closed: bool = False
+        self._frame_count: int = 0
+        PushStreamSource._instance = self
+
+    @classmethod
+    def get_instance(cls, width: int = 960, height: int = 540) -> "PushStreamSource":
+        if cls._instance is None:
+            cls._instance = PushStreamSource("phone", width or 960, height or 540)
+        return cls._instance
+
+    def open(self) -> "PushStreamSource":
+        self._closed = False
+        log.info("PushStreamSource opened (listening for phone camera feed)")
+        return self
+
+    def push_frame(self, frame: np.ndarray) -> None:
+        import cv2
+
+        if self.width and self.height and (frame.shape[1] != self.width or frame.shape[0] != self.height):
+            frame = cv2.resize(frame, (self.width, self.height), interpolation=cv2.INTER_LINEAR)
+        with self._lock:
+            self._latest_frame = frame
+            self._last_push_ts = time.time()
+            self._frame_count += 1
+            self._new_frame_evt.set()
+
+    def push_jpeg(self, data: bytes) -> bool:
+        import cv2
+
+        try:
+            arr = np.frombuffer(data, dtype=np.uint8)
+            frame = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+            if frame is not None and frame.size > 0:
+                self.push_frame(frame)
+                return True
+        except Exception as e:
+            log.debug("push_jpeg decode failed: %s", e)
+        return False
+
+    def is_streaming(self) -> bool:
+        with self._lock:
+            return (time.time() - self._last_push_ts) < 3.0
+
+    def read(self) -> Optional[np.ndarray]:
+        while not self._closed:
+            # If a new frame arrived, return it immediately
+            if self._new_frame_evt.wait(timeout=0.1):
+                self._new_frame_evt.clear()
+                with self._lock:
+                    if self._latest_frame is not None:
+                        return self._latest_frame.copy()
+
+            # If frames were streaming recently (< 2.0s), hold/repeat latest frame
+            with self._lock:
+                now = time.time()
+                if self._latest_frame is not None and (now - self._last_push_ts < 2.0):
+                    return self._latest_frame.copy()
+
+            # Otherwise, yield standby frame at ~10 FPS so capture loop stays active
+            time.sleep(0.08)
+            return self._get_standby_frame()
+
+        return None
+
+    def _get_standby_frame(self) -> np.ndarray:
+        import cv2
+
+        w = self.width or 960
+        h = self.height or 540
+        canvas = np.zeros((h, w, 3), dtype=np.uint8)
+        canvas[:] = (29, 29, 31)  # #1d1d1f dark theme background
+
+        box_x1, box_y1 = int(w * 0.12), int(h * 0.15)
+        box_x2, box_y2 = int(w * 0.88), int(h * 0.85)
+        cv2.rectangle(canvas, (box_x1, box_y1), (box_x2, box_y2), (55, 55, 60), 1)
+
+        cv2.putText(canvas, "HAWKEYE - PHONE CAMERA SOURCE", (box_x1 + 24, box_y1 + 55),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.75, (255, 151, 41), 2)  # BGR
+        cv2.putText(canvas, "Waiting for phone video stream...", (box_x1 + 24, box_y1 + 105),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.65, (220, 220, 220), 1)
+        cv2.putText(canvas, "1. Open HawkEye in your phone browser", (box_x1 + 24, box_y1 + 160),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.52, (170, 170, 170), 1)
+        cv2.putText(canvas, "2. Tap the Camera tab and press 'Start Broadcasting'", (box_x1 + 24, box_y1 + 195),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.52, (170, 170, 170), 1)
+        return canvas
+
+    def release(self) -> None:
+        self._closed = True
+        self._new_frame_evt.set()
+        with self._lock:
+            self._latest_frame = None
+
+    @property
+    def is_open(self) -> bool:
+        return not self._closed
+
+
 class DroneSource(VideoSource):
     """Phase 2 placeholder — a Tello stream plugs in here (djitellopy).
 
@@ -268,13 +376,16 @@ class DroneSource(VideoSource):
 def open_source(spec: str, width: int = 0, height: int = 0) -> VideoSource:
     """Factory: pick a source from the spec.
 
-    - "0", "1", ...        -> webcam index
-    - "screen", "screen:1" -> real-time desktop screen capture
-    - http(s)/rtsp URL     -> IP camera (e.g. phone IP-webcam app)
-    - "drone:..."          -> Phase 2 Tello source (not yet implemented)
-    - anything else        -> video file (looped, handy for demos on datasets)
+    - "0", "1", ...             -> webcam index
+    - "screen", "screen:1"      -> real-time desktop screen capture
+    - "phone", "client", "push" -> real-time stream from phone/client over WebSocket or HTTP
+    - http(s)/rtsp URL          -> IP camera (e.g. phone IP-webcam app)
+    - "drone:..."               -> Phase 2 Tello source (not yet implemented)
+    - anything else             -> video file (looped, handy for demos on datasets)
     """
     s = spec.strip()
+    if s in ("phone", "client", "stream", "push", "remote") or s.startswith("phone:") or s.startswith("client:"):
+        return PushStreamSource.get_instance(width, height).open()
     if s == "screen" or s.startswith("screen:"):
         return ScreenSource(s, width, height).open()
     if s.startswith("drone:"):

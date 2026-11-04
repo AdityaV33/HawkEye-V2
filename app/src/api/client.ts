@@ -71,6 +71,14 @@ export const api = {
   get: <S extends z.ZodTypeAny>(path: string, schema: S, init?: RequestInit & { timeoutMs?: number }) =>
     request(path, schema, { ...init, method: 'GET' }),
 
+  post: <S extends z.ZodTypeAny>(path: string, body: unknown, schema: S, init?: RequestInit & { timeoutMs?: number }) =>
+    request(path, schema, {
+      ...init,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
+      body: JSON.stringify(body),
+    }),
+
   /** POST multipart/form-data (used by enrollment). Returns the parsed body. */
   postForm: <S extends z.ZodTypeAny>(path: string, form: FormData, schema: S) =>
     request(path, schema, { method: 'POST', body: form, timeoutMs: 30_000 }),

@@ -15,7 +15,7 @@ export default function TabsLayout() {
       <Tabs.Screen name="incidents" />
       <Tabs.Screen name="attendance" />
       <Tabs.Screen name="people" />
-      <Tabs.Screen name="drone" />
+      <Tabs.Screen name="camera" />
     </Tabs>
   );
 }

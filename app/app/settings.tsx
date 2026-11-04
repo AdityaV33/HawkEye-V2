@@ -206,7 +206,7 @@ export default function SettingsScreen() {
               Indoor autonomous surveillance — live monitoring, incidents, attendance & identity.
             </Text>
             <Text style={styles.aboutNote}>
-              Authentication, push alerts, and drone control arrive in later phases.
+              Authentication and push alerts arrive in later phases.
             </Text>
           </Card>
         </Animated.View>
