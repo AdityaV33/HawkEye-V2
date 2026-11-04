@@ -5,6 +5,6 @@ Reuses the same local face database and recognizer as the identity module
 runs *continuously* on a slow timer: every few seconds it matches every enrolled
 face in view and logs presence (one record per member per day).
 """
-from .store import AttendanceStore
+from .store import AttendanceStore, date_str
 
-__all__ = ["AttendanceStore"]
+__all__ = ["AttendanceStore", "date_str"]

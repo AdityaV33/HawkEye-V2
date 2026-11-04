@@ -251,7 +251,11 @@ async def enroll(name: str = Form(...), meta: str = Form("{}"),
 @app.delete("/api/people/{person_id}")
 async def delete_person(person_id: str):
     app.state.pipeline.identity.delete_person(person_id)
-    app.state.hub.set_status(enrolled=app.state.pipeline.identity.enrolled)
+    app.state.pipeline.attendance.delete_person(person_id)
+    app.state.hub.set_status(
+        enrolled=app.state.pipeline.identity.enrolled,
+        present_today=app.state.pipeline.attendance.present_count(),
+    )
     return {"ok": True}
 
 
@@ -319,7 +323,7 @@ async def ws(websocket: WebSocket):
             if status is not None:
                 await websocket.send_text(json.dumps({"type": "status", "data": status}))
             await asyncio.sleep(1 / 15)
-    except (WebSocketDisconnect, RuntimeError):
+    except (WebSocketDisconnect, RuntimeError, ConnectionResetError, BrokenPipeError, asyncio.CancelledError, Exception):
         return
 
 

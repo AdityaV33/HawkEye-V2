@@ -83,12 +83,16 @@ class IdentityRecognizer:
             self._repair_corrupt_cache()
             from insightface.app import FaceAnalysis
 
-            providers = (["CUDAExecutionProvider", "CPUExecutionProvider"]
-                         if self.use_gpu else ["CPUExecutionProvider"])
+            import onnxruntime as ort
+
+            avail = set(ort.get_available_providers())
+            desired = ["CUDAExecutionProvider", "CPUExecutionProvider"] if self.use_gpu else ["CPUExecutionProvider"]
+            providers = [p for p in desired if p in avail] or ["CPUExecutionProvider"]
+            ctx_id = 0 if (self.use_gpu and "CUDAExecutionProvider" in providers) else -1
             log.info("Loading InsightFace %s (%s)", self.model_name, providers[0])
             try:
                 app_ = FaceAnalysis(name=self.model_name, providers=providers)
-                app_.prepare(ctx_id=0 if self.use_gpu else -1,
+                app_.prepare(ctx_id=ctx_id,
                              det_size=(self.det_size, self.det_size))
             except Exception as e:
                 self._load_error = e

@@ -107,9 +107,9 @@ export type Person = z.infer<typeof Person>;
 export const AttendanceRecord = z.object({
   person_id: z.string(),
   name: z.string(),
-  date: z.string(),
-  first_seen: z.number(),
-  last_seen: z.number(),
+  date: z.string().default(() => new Date().toISOString().slice(0, 10)),
+  first_seen: z.number().default(() => Date.now() / 1000),
+  last_seen: z.number().default(() => Date.now() / 1000),
   sightings: z.number().default(1),
 });
 export type AttendanceRecord = z.infer<typeof AttendanceRecord>;

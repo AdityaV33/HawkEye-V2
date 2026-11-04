@@ -9,7 +9,7 @@
  *
  * Timestamps from the backend are epoch seconds (see @/utils/format).
  */
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   FlatList,
   RefreshControl,
@@ -104,6 +104,12 @@ export default function AttendanceScreen() {
   const records = data ?? [];
   const count = records.length;
   const enrolled = status?.enrolled ?? null;
+
+  useEffect(() => {
+    if (isToday && (status?.present_today ?? 0) > records.length) {
+      refetch();
+    }
+  }, [isToday, status?.present_today, records.length, refetch]);
   // Only treat this as the first-load skeleton when we truly have no data yet
   // (a refetch keeps the prior list visible, driven by the RefreshControl).
   const loadingInitial = isLoading && !data;
@@ -121,12 +127,10 @@ export default function AttendanceScreen() {
   );
   const goToday = useCallback(() => setSelectedDate(isoDate()), []);
 
-  // Hero context line adapts to the selected day (and enrolled roster size).
+  // Hero context line adapts to the selected day.
   const heroCaption = isToday
-    ? enrolled != null
-      ? `of ${enrolled} enrolled · seen today`
-      : 'recognized on the live feed today'
-    : `seen ${relativeLabel === 'Yesterday' ? 'yesterday' : `on ${relativeLabel}`}`;
+    ? 'Enrolled members present'
+    : `Enrolled members present on ${relativeLabel}`;
 
   const renderItem: ListRenderItem<AttendanceRecord> = useCallback(
     ({ item, index }) => <AttendanceRow record={item} index={index} />,
@@ -192,7 +196,7 @@ export default function AttendanceScreen() {
             />
 
             {count > 0 ? (
-              <SectionHeader title="Present" count={count} />
+              <SectionHeader title="Present" />
             ) : null}
           </View>
         }
@@ -268,7 +272,7 @@ function Hero({
 /* Rows                                                                       */
 /* -------------------------------------------------------------------------- */
 
-/** One present person: check avatar + name + timing meta + "present" badge. */
+/** One present person: check avatar + name + timing + "present" badge. */
 function AttendanceRow({
   record,
   index,
@@ -278,7 +282,6 @@ function AttendanceRow({
 }) {
   // Stagger entrances but cap the delay so long lists don't drip in slowly.
   const delay = Math.min(index, 8) * motion.stagger;
-  const sightingLabel = `${record.sightings} sighting${record.sightings === 1 ? '' : 's'}`;
 
   return (
     <Animated.View entering={FadeInDown.delay(delay).springify().damping(18)}>
@@ -291,8 +294,7 @@ function AttendanceRow({
             {record.name}
           </Text>
           <Text style={styles.meta} numberOfLines={1}>
-            first seen {timeOfDay(record.first_seen)} · last{' '}
-            {timeOfDay(record.last_seen)} · {sightingLabel}
+            at {timeOfDay(record.first_seen)}
           </Text>
         </View>
         <Badge label="present" fg={palette.green} bg={palette.greenDim} />
@@ -308,7 +310,7 @@ function AttendanceSkeletonRow() {
       <Skeleton width={36} height={36} radius={radii.pill} />
       <View style={styles.rowBody}>
         <Skeleton width="45%" height={15} />
-        <Skeleton width="80%" height={12} />
+        <Skeleton width="25%" height={12} />
       </View>
       <Skeleton width={62} height={20} radius={radii.sm} />
     </View>

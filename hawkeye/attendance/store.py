@@ -68,6 +68,11 @@ class AttendanceStore:
                 "SELECT COUNT(*) AS n FROM attendance WHERE date=?", (d,)).fetchone()
         return int(r["n"]) if r else 0
 
+    def delete_person(self, person_id: str) -> None:
+        """Remove a person's attendance records when they are unenrolled."""
+        with self._lock, self._conn:
+            self._conn.execute("DELETE FROM attendance WHERE person_id=?", (person_id,))
+
     def close(self) -> None:
         """Release the SQLite connection (call on pipeline shutdown)."""
         with self._lock:

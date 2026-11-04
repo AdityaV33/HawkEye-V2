@@ -39,8 +39,8 @@ detect:
   # When set + present, YOLO proposes candidates and chromatic gating verifies them.
   # When the file is missing, the zero-weight chromatic & flicker fallback runs automatically.
   fire_model: "models/fire.pt"
-  fire_conf: 0.70
-  smoke_conf: 0.70
+  fire_conf: 0.67
+  smoke_conf: 0.67
   fire_hysteresis_hits: 3
   fire_verify_chromatic: true
   fire_chromatic_fallback: true
@@ -91,7 +91,7 @@ identity:
   model_name: "buffalo_l"          # InsightFace pack: RetinaFace + ArcFace (512-d)
   det_size: 640
   attendance_enabled: true         # continuously log enrolled members seen on camera
-  attendance_interval_sec: 3.0     # scan cadence (seconds) — cheap, runs off the hot path
+  attendance_interval_sec: 0.5     # scan cadence (seconds) — responsive, marks present as soon as seen
 
 decision:
   confidence_min: 0.5              # ignore incidents below this reasoning confidence

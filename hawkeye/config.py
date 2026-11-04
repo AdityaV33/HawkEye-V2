@@ -45,8 +45,8 @@ class DetectConfig(BaseModel):
     weapon_labels: List[str] = Field(default_factory=list)
     # Fire and smoke detection (Hybrid Approach C: YOLO + chromatic verification)
     fire_model: str = ""              # path to a trained fire/smoke YOLO (e.g. models/fire.pt)
-    fire_conf: float = 0.70           # strict high confidence floor for fire detector (well above average)
-    smoke_conf: float = 0.70          # strict high confidence floor for smoke detector
+    fire_conf: float = 0.67           # strict high confidence floor for fire detector (well above average)
+    smoke_conf: float = 0.67          # strict high confidence floor for smoke detector
     fire_hysteresis_hits: int = 3     # consecutive frames required to trigger FIRE event
     fire_verify_chromatic: bool = True # use chromatic & edge-flicker gate to reject screens/clothing
     fire_chromatic_fallback: bool = True # run lightweight chromatic detector when fire_model is not present
@@ -92,7 +92,7 @@ class IdentityConfig(BaseModel):
     model_name: str = "buffalo_l"
     det_size: int = 640
     attendance_enabled: bool = True        # continuous face-recognition attendance
-    attendance_interval_sec: float = 3.0   # how often to scan the frame for members
+    attendance_interval_sec: float = 0.5   # how often to scan the frame for members (responsive)
 
 
 class DecisionConfig(BaseModel):

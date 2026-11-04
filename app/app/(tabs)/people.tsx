@@ -140,6 +140,15 @@ export default function PeopleScreen() {
 
   /** Confirm, then remove a person and their enrolled faces. */
   const confirmDelete = (p: Person) => {
+    if (Platform.OS === 'web') {
+      const ok = typeof window !== 'undefined'
+        ? window.confirm(`Remove ${p.name} from the identity database? This deletes their enrolled faces.`)
+        : true;
+      if (ok) {
+        runDelete(p);
+      }
+      return;
+    }
     Alert.alert(
       'Remove person',
       `Remove ${p.name} from the identity database? This deletes their enrolled faces.`,
@@ -155,8 +164,8 @@ export default function PeopleScreen() {
     try {
       await del.mutateAsync(p.id);
       toast.show(`${p.name} removed`, 'info', 'trash');
-    } catch {
-      toast.show('Could not remove person', 'alert', 'warning');
+    } catch (e) {
+      toast.show(errorMessage(e), 'alert', 'warning');
     } finally {
       setDeletingId(null);
     }
