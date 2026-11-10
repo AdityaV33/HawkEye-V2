@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import argparse
 
-from .config import load_config
+from .config import PROJECT_ROOT, load_config
 from .runtime import set_config, setup_logging
 
 
@@ -24,6 +24,7 @@ def main() -> None:
     ap.add_argument("--host", default=None)
     ap.add_argument("--port", type=int, default=None)
     ap.add_argument("--no-identity", action="store_true", help="Disable face identity")
+    ap.add_argument("--ssl", action="store_true", help="Enable HTTPS (required for phone camera without chrome flags)")
     args = ap.parse_args()
 
     setup_logging()
@@ -43,7 +44,15 @@ def main() -> None:
     import uvicorn
 
     from server.app import app  # imported after config is set
-    uvicorn.run(app, host=cfg.server.host, port=cfg.server.port, log_level="info")
+
+    ssl_kwargs = {}
+    if args.ssl:
+        cert_file = PROJECT_ROOT / "data" / "certs" / "cert.pem"
+        key_file = PROJECT_ROOT / "data" / "certs" / "key.pem"
+        if cert_file.is_file() and key_file.is_file():
+            ssl_kwargs = {"ssl_certfile": str(cert_file), "ssl_keyfile": str(key_file)}
+
+    uvicorn.run(app, host=cfg.server.host, port=cfg.server.port, log_level="info", **ssl_kwargs)
 
 
 if __name__ == "__main__":

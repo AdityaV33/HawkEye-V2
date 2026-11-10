@@ -19,6 +19,7 @@ data/datasets/
 data/evidence/
 data/*.db
 data/faces/
+data/certs/
 models/*.onnx
 models/*.engine
 models/weights/

@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import List
 
 import numpy as np
-from fastapi import FastAPI, File, Form, HTTPException, Response, UploadFile, WebSocket
+from fastapi import FastAPI, File, Form, HTTPException, Request, Response, UploadFile, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -342,19 +342,20 @@ def get_lan_ip() -> str:
 
 
 @app.get("/api/camera/status")
-async def camera_status():
+async def camera_status(request: Request):
     from hawkeye.ingest.sources import PushStreamSource
 
     push_source = PushStreamSource.get_instance()
     current_source = app.state.cfg.ingest.source
     lan_ip = get_lan_ip()
     port = app.state.cfg.server.port or 8000
+    scheme = request.url.scheme or "http"
     return {
         "current_source": current_source,
         "is_streaming": push_source.is_streaming(),
         "lan_ip": lan_ip,
         "port": port,
-        "connect_url": f"http://{lan_ip}:{port}",
+        "connect_url": f"{scheme}://{lan_ip}:{port}",
     }
 
 

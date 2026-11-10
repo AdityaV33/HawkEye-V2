@@ -67,6 +67,10 @@ export const useCameraStream = create<CameraStreamState>((set, get) => ({
 
     try {
       if (!navigator.mediaDevices?.getUserMedia) {
+        const isSecure = typeof window !== 'undefined' ? window.isSecureContext : false;
+        if (!isSecure) {
+          throw new Error('Browser blocked camera over HTTP. Run server with --ssl or enable chrome://flags/#unsafely-treat-insecure-origin-as-secure on phone.');
+        }
         throw new Error('Camera access not supported by this browser.');
       }
 
@@ -221,3 +225,4 @@ export const useCameraStream = create<CameraStreamState>((set, get) => ({
     set({ isBroadcasting: false, fps: 0 });
   },
 }));
+
