@@ -420,6 +420,32 @@ export default function CameraScreen() {
                 </Text>
               </View>
             </View>
+
+            {connectUrl.startsWith('http://') && (
+              <View style={styles.tipCard}>
+                <Ionicons name="information-circle-outline" size={18} color={palette.amber} />
+                <View style={{ flex: 1, gap: 2 }}>
+                  <Text style={styles.tipTitle}>Camera Access Notice</Text>
+                  <Text style={styles.tipText}>
+                    Mobile browsers restrict camera access over plain HTTP. Start HawkEye with{' '}
+                    <Text style={styles.boldText}>--ssl</Text> to use HTTPS (then tap Advanced → Proceed on phone), or enable{' '}
+                    <Text style={styles.boldText}>chrome://flags/#unsafely-treat-insecure-origin-as-secure</Text>.
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            {connectUrl.startsWith('https://') && (
+              <View style={styles.tipCardSuccess}>
+                <Ionicons name="shield-checkmark-outline" size={18} color={palette.green} />
+                <View style={{ flex: 1, gap: 2 }}>
+                  <Text style={styles.tipTitleSuccess}>HTTPS Enabled</Text>
+                  <Text style={styles.tipTextSuccess}>
+                    Self-signed certificate active. On your phone, tap <Text style={styles.boldText}>Advanced</Text> → <Text style={styles.boldText}>Proceed</Text> to open the page and grant camera permission.
+                  </Text>
+                </View>
+              </View>
+            )}
           </Card>
         </Animated.View>
 
@@ -720,5 +746,47 @@ const styles = StyleSheet.create({
   boldText: {
     color: palette.text,
     fontWeight: '600',
+  },
+  tipCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    padding: spacing.md,
+    borderRadius: radii.md,
+    backgroundColor: palette.amberDim,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(245, 158, 11, 0.3)',
+    marginTop: spacing.xs,
+  },
+  tipTitle: {
+    ...typography.caption,
+    fontWeight: '700',
+    color: palette.amber,
+  },
+  tipText: {
+    ...typography.micro,
+    color: palette.textSecondary,
+    lineHeight: 16,
+  },
+  tipCardSuccess: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    padding: spacing.md,
+    borderRadius: radii.md,
+    backgroundColor: palette.greenDim,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(34, 197, 94, 0.3)',
+    marginTop: spacing.xs,
+  },
+  tipTitleSuccess: {
+    ...typography.caption,
+    fontWeight: '700',
+    color: palette.green,
+  },
+  tipTextSuccess: {
+    ...typography.micro,
+    color: palette.textSecondary,
+    lineHeight: 16,
   },
 });

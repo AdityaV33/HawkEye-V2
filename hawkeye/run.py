@@ -47,8 +47,34 @@ def main() -> None:
 
     ssl_kwargs = {}
     if args.ssl:
-        cert_file = PROJECT_ROOT / "data" / "certs" / "cert.pem"
-        key_file = PROJECT_ROOT / "data" / "certs" / "key.pem"
+        cert_dir = PROJECT_ROOT / "data" / "certs"
+        cert_file = cert_dir / "cert.pem"
+        key_file = cert_dir / "key.pem"
+        if not (cert_file.is_file() and key_file.is_file()):
+            cert_dir.mkdir(parents=True, exist_ok=True)
+            import shutil, subprocess
+            if shutil.which("openssl"):
+                import logging
+                logging.getLogger("hawkeye").info(
+                    "Generating self-signed SSL certificates in data/certs/..."
+                )
+                try:
+                    subprocess.run(
+                        [
+                            "openssl", "req", "-x509", "-newkey", "rsa:2048",
+                            "-keyout", str(key_file), "-out", str(cert_file),
+                            "-days", "365", "-nodes", "-subj", "/CN=hawkeye",
+                        ],
+                        check=True,
+                        capture_output=True,
+                    )
+                except Exception as exc:
+                    logging.getLogger("hawkeye").warning(f"Failed to auto-generate SSL certs: {exc}")
+            else:
+                import logging
+                logging.getLogger("hawkeye").warning(
+                    "--ssl specified but data/certs/cert.pem was not found and openssl CLI is missing."
+                )
         if cert_file.is_file() and key_file.is_file():
             ssl_kwargs = {"ssl_certfile": str(cert_file), "ssl_keyfile": str(key_file)}
 
