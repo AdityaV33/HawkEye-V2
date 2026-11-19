@@ -63,10 +63,13 @@ class Pipeline:
         self._worker_ts: List[threading.Thread] = []
         self._attendance_t: Optional[threading.Thread] = None
         self._retention_t: Optional[threading.Thread] = None
+        self._identity_t: Optional[threading.Thread] = None
+        self._reasoner_t: Optional[threading.Thread] = None
         self._fps = 0.0
         self._NUM_WORKERS = 2
         self._last_logged_incident: Dict[str, float] = {}
         self._incident_dedup_lock = threading.Lock()
+        self._next_source_spec: Optional[str] = None
 
     # --- lifecycle ---
     def start(self) -> None:
@@ -77,10 +80,12 @@ class Pipeline:
             # Loaded in the background (not blocking startup): the model
             # download/prepare can take minutes on first run, and the
             # dashboard/video feed should be usable immediately regardless.
-            threading.Thread(target=self._load_identity, daemon=True).start()
+            self._identity_t = threading.Thread(target=self._load_identity, daemon=True, name="identity-loader")
+            self._identity_t.start()
         # Same reasoning as identity: a lazy-loading reasoner (Moondream) can
         # take minutes on first run, and that must not stall the first trigger.
-        threading.Thread(target=self.reasoner.preload, daemon=True).start()
+        self._reasoner_t = threading.Thread(target=self.reasoner.preload, daemon=True, name="reasoner-preload")
+        self._reasoner_t.start()
         self._running = True
         self.hub.set_status(running=True, reasoner=self.reasoner.name,
                             identity=self.identity.available,
@@ -121,7 +126,15 @@ class Pipeline:
             self._triggers.put_nowait(_SENTINEL)
         except queue.Full:
             pass
-        for t in (self._capture_t, *self._worker_ts, self._attendance_t, self._retention_t):
+        threads = [
+            getattr(self, "_capture_t", None),
+            *getattr(self, "_worker_ts", []),
+            getattr(self, "_attendance_t", None),
+            getattr(self, "_retention_t", None),
+            getattr(self, "_identity_t", None),
+            getattr(self, "_reasoner_t", None),
+        ]
+        for t in threads:
             if t is not None and t.is_alive():
                 t.join(timeout=timeout)
                 if t.is_alive():
@@ -153,12 +166,17 @@ class Pipeline:
         finally:
             self.hub.set_status(identity=self.identity.available)
 
+    def switch_source(self, new_spec: str) -> None:
+        """Request switching the video capture source at runtime."""
+        self._next_source_spec = str(new_spec).strip()
+
     # --- capture (real-time) ---
     def _capture_loop(self) -> None:
         import cv2
 
+        source_spec = self.cfg.ingest.source
         try:
-            source = open_source(self.cfg.ingest.source,
+            source = open_source(source_spec,
                                  self.cfg.ingest.width, self.cfg.ingest.height)
         except Exception as e:
             log.error("Could not open source: %s", e)
@@ -169,9 +187,26 @@ class Pipeline:
         frame_id = 0
         try:
             while self._running:
+                if self._next_source_spec is not None:
+                    target_spec = self._next_source_spec
+                    self._next_source_spec = None
+                    if target_spec != source_spec or not source.is_open:
+                        log.info("Switching capture source from '%s' to '%s'", source_spec, target_spec)
+                        try:
+                            new_source = open_source(target_spec, self.cfg.ingest.width, self.cfg.ingest.height)
+                            source.release()
+                            source = new_source
+                            source_spec = target_spec
+                            self.cfg.ingest.source = target_spec
+                            self.hub.set_status(source=target_spec)
+                        except Exception as e:
+                            log.error("Failed to switch source to '%s': %s", target_spec, e)
+
                 t0 = time.time()
                 frame = source.read()
                 if frame is None:
+                    if self._next_source_spec is not None:
+                        continue
                     log.info("End of stream / source read failed.")
                     break
                 self._ring.append(frame.copy())

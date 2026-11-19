@@ -118,5 +118,5 @@ storage:
   evidence_dir: "data/evidence"
 
 server:
-  host: "127.0.0.1"
+  host: "0.0.0.0"
   port: 8000

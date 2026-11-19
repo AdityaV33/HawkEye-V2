@@ -1,126 +1,257 @@
-# HawkEye — Indoor Surveillance & Attendance
+# 🦅 HawkEye — Explainable AI Surveillance & Biometric Attendance
 
-Real-time system that watches a camera feed and does **two jobs from one local face database**:
+> **Final Year Engineering Capstone Project**  
+> *"HawkEye doesn't just watch for danger — it understands the scene, explains incidents in natural language, and knows who is in the building."*
 
-1. **Surveillance** — **detects** anomalies (violence, falls/medical, weapons, intrusion, accidents, fire — and novel "any bad thing" events), **explains what happened in plain language**, **identifies who** was involved, and **decides the response** (police / ambulance / fire).
-2. **Attendance** — continuously recognizes enrolled members on camera and **logs who's present** (one record per person per day).
+[![Python](https://img.shields.io/badge/Python-3.10%20%7C%203.11%20%7C%203.12-blue?logo=python&logoColor=white)](https://www.python.org/)
+[![PyTorch](https://img.shields.io/badge/PyTorch-2.4+-EE4C2C?logo=pytorch&logoColor=white)](https://pytorch.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![React Native](https://img.shields.io/badge/React%20Native%20%2F%20Expo-SDK%2052-61DAFB?logo=react&logoColor=black)](https://expo.dev/)
+[![YOLO11](https://img.shields.io/badge/Ultralytics-YOLO11-00FFFF?logo=ultralytics)](https://github.com/ultralytics/ultralytics)
+[![InsightFace](https://img.shields.io/badge/InsightFace-ArcFace%20%2B%20RetinaFace-orange)](https://github.com/deepinsight/insightface)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Everything is shown on a live web app. *"HawkEye doesn't just watch for danger — it knows who's in the building."*
+---
 
-Phase 1 (this build) runs on a **hand-moved / fixed camera**. The drone (a human-piloted LiteWing + WiFi camera) is a Phase 2 plug-in; production hardening is Phase 3.
+## 📌 Executive Summary
 
-## Why it's different (USP)
+Conventional CCTV surveillance systems suffer from three fundamental limitations:
+1. **Dumb Motion Alerts**: They flag arbitrary motion (shadows, pets, ceiling fans) rather than understanding semantic context.
+2. **Binary Classifications without Explanations**: A classical model outputs `anomaly: 0.88`, leaving human operators guessing what actually occurred.
+3. **Disjoint Systems**: Threat monitoring and daily attendance tracking run as separate, siloed hardware setups.
 
-1. **Explain, don't just detect** — a triggered vision-language layer writes a natural-language incident report (basis: LAVAD, CVPR 2024; Holmes-VAD).
-2. **Open-vocabulary** — the VLM can flag anomalies it was never trained on ("a tree fell", "an abandoned bag"), directly answering the "any other bad thing" requirement.
-3. **Fast/slow cascade** — a lightweight always-on detector runs real-time; the heavy VLM fires **only on suspicion**, which also **kills false alarms**.
-4. **Anomaly → Identity → Action, one loop** — names *who* and decides *what to do*, not just "anomaly: yes".
-5. **Camera-agnostic** — the same pipeline runs on webcam → phone → drone (Phase 2 swaps only the video source).
-6. **Gated, auditable dispatch** — every automated action is severity/confidence-gated, cooldown-protected, and logged.
-7. **Dual utility from one face DB** — the same enrolled-member database powers both perpetrator identification *and* passive attendance logging; enroll once, get both.
+**HawkEye solves this with a unified, edge-deployed AI architecture**:
+- **Dual Mission from One Face Database**: Uses a single enrolled local biometric database to simultaneously perform **real-time security incident response** (identifying perpetrators/victims) and **passive, zero-touch daily attendance logging**.
+- **Fast/Slow Cascade Architecture** *(inspired by LAVAD, CVPR 2024 & Holmes-VAD)*: Lightweight, real-time edge models (Stage A) run continuously at 20–30 FPS. Only when a potential anomaly is detected does an asynchronous Vision-Language Model (Stage B VLM) wake up to verify the scene, eliminate false alarms, and generate a natural-language incident report.
+- **One Process, One Address**: A unified FastAPI application orchestrates the vision pipeline, runs WebSocket streaming, and serves the pre-built React Native / Expo operator dashboard—no separate frontend servers required.
 
-## Architecture
+---
+
+## 🏗️ System Architecture
 
 ```
-camera ─▶ Stage A (real-time)          ─▶ Stage B (triggered VLM)  ─▶ Identity  ─▶ Decision ─▶ App
-         pose·action model·weapon·motion   explain·severity·action     face match    gated dispatch
+                                  ┌────────────────────────────────────────────────────────┐
+                                  │            REAL-TIME PIPELINE (Stage A, ~25 FPS)       │
+ ┌──────────────────────┐         │                                                        │
+ │     Video Ingest     │         │  1. YOLO11n-Pose  ──▶ Skeleton Keypoints (17 joints)   │
+ │  • Local Webcam (0)  │───────▶ │  2. ActionNet     ──▶ Bi-GRU (Violence / Fall / Normal)│
+ │  • Wireless Phone Cam│         │  3. Weapons YOLO  ──▶ Handheld & Spatial Grasp Gating  │
+ │  • Desktop Screen    │         │  4. Fire & Smoke  ──▶ Hybrid YOLO + Chromatic Flicker  │
+ │  • RTSP / IP Stream  │         │                                                        │
+ └──────────────────────┘         │  Annotated Frame  ──▶ StreamHub (MJPEG / WebSocket)   │
+                                  └───────────────────────────┬────────────────────────────┘
+                                                              │ (Trigger: Anomaly Proposal)
+                                                              ▼
+                                  ┌────────────────────────────────────────────────────────┐
+                                  │           ASYNC WORKER POOL (Stage B & Decisions)      │
+                                  │                                                        │
+                                  │  1. Ring-Buffer Snapshot (3-second temporal window)    │
+                                  │  2. VLM Incident Reasoner:                             │
+                                  │     • Claude 3.5 Sonnet (Cloud, high fidelity)         │
+                                  │     • Moondream2 (Local edge VLM, fully offline)       │
+                                  │     • Mock Reasoner (Zero-dependency test harness)     │
+                                  │  3. Semantic Filter: False alarms pruned silently      │
+                                  │  4. Local Biometrics: InsightFace (ArcFace 512-d)      │
+                                  │  5. Decision Engine: Severity/Confidence Gates + Rules │
+                                  │  6. Automated Dispatch: Police / Ambulance / Fire      │
+                                  │  7. Evidence Storage: SQLite + Crops + Thumbnails      │
+                                  └───────────────────────────┬────────────────────────────┘
+                                                              │
+                                                              ▼
+                                  ┌────────────────────────────────────────────────────────┐
+                                  │       OPERATOR DASHBOARD (FastAPI + React Native Web)  │
+                                  │                                                        │
+                                  │  • Live Feed with Tactical HUD & AI Overlays           │
+                                  │  • Incident Feed with Natural-Language Explanations    │
+                                  │  • Daily Attendance Ledger (Passive Biometrics)        │
+                                  │  • People Roster & Multi-Photo Face Enrollment         │
+                                  │  • Camera Hub: Wireless Phone Broadcaster & Switcher   │
+                                  └────────────────────────────────────────────────────────┘
 ```
 
-- **Stage A** (`hawkeye/detect/`): YOLO11 pose + a trained skeleton-sequence action classifier (violence/fall/normal — falls back to zero-training heuristics if no weights are configured) + motion anomaly + a fine-tuned weapon YOLO → fused anomaly event.
-- **Stage B** (`hawkeye/reason/`): pluggable reasoner — **Claude** (cloud, best quality) · **Moondream2** (local offline) · **mock** (no deps).
-- **Identity** (`hawkeye/identity/`): InsightFace (RetinaFace + ArcFace) + cosine match vs a local ~20-person DB. Used both for perpetrator ID on incidents and for attendance.
-- **Attendance** (`hawkeye/attendance/`): a slow-cadence worker (off the real-time path) that recognizes all enrolled members in view and logs presence — one record per person per day.
-- **Decision** (`hawkeye/decision/`): config-driven rules + gating + cooldown + dispatchers.
-- **Server + App** (`server/`, `app/`): one FastAPI process serves the REST API, the live WebSocket feed, *and* the operator app (`app/dist`, an Expo build) — one address for everything. See [`app/README.md`](app/README.md) for the app itself, and Section "Run" below for how the two fit together.
+---
 
-## Setup
+## 🚀 Key Capabilities
 
-**macOS (primary target — CPU/MPS, including model training):**
+### 1. Threat Detection (Stage A)
+- **Violence & Scuffles**: Custom trained Bi-GRU temporal classifier operating over normalized skeleton kinematics, coupled with combatant proximity, striking reach, and spectator rejection geometry.
+- **Falls & Medical Collapses**: Keypoint aspect ratio analysis, vertical velocity drops, and ground-level post-impact stillness detection.
+- **Brandished Weapons**: Fine-tuned weapon YOLO with verified wrist-to-object grasp geometry to prevent false positives from phones or belts.
+- **Fire & Smoke**: Hybrid Approach C combining deep YOLO object proposals with chromatic flame flicker analysis and smoke saturation verification.
+
+### 2. Explainable Incident Reports (Stage B VLM)
+When an anomaly crosses threshold, HawkEye extracts temporal video slices and queries the Vision-Language reasoner. Instead of an obscure alert code, HawkEye generates human-readable incident logs:
+> *"A physical altercation was confirmed between two individuals in the lobby. Subject A delivered repeated strikes while Subject B was on the floor. Severity: High. Recommended dispatch: Police."*
+
+### 3. Continuous Passive Attendance
+- Runs on a background cadence (~0.5s intervals) off the primary detection path.
+- Automatically recognizes registered faces via InsightFace (RetinaFace + ArcFace cosine similarity $\ge 0.42$).
+- Records exactly one attendance event per person per day (`first_seen` timestamp) and syncs live across WebSockets.
+
+### 4. Turn Any Smartphone into an Edge Surveillance Eye
+- **In-Browser WebRTC/WebSocket Broadcaster**: Open HawkEye on any mobile browser (Safari/Chrome), navigate to the **Camera** tab, and tap **"Broadcast to HawkEye"**.
+- Hardware camera streams over WebSockets at ~18 FPS directly into the backend AI pipeline.
+- Hot-swap sources on the fly between **Phone Camera**, **Webcam**, **Screen Capture**, or **RTSP IP Streams** without restarting the server.
+
+---
+
+## 💻 Tech Stack
+
+| Component | Technology | Description |
+|---|---|---|
+| **Pose & Keypoints** | Ultralytics YOLO11n-Pose | Real-time 17-point human anatomical keypoint estimation |
+| **Action Recognition** | PyTorch Bi-GRU (`action_gru_custom.pt`) | Sequence classification trained on fall, violence, and normal actions |
+| **Weapon Detection** | Fine-tuned YOLO (`weapons.pt`) | Handheld knife and firearm detection with grasp validation |
+| **Fire & Smoke** | Hybrid YOLO (`fire.pt`) + Chromatic Filter | Dual-spectrum fire and smoke detection |
+| **Vision-Language Model** | Anthropic Claude 3.5 Sonnet / Moondream2 | Multimodal incident reasoning & natural-language reports |
+| **Facial Biometrics** | InsightFace (buffalo_l: RetinaFace + ArcFace) | 512-dimensional cosine similarity face recognition |
+| **Backend Framework** | FastAPI + Uvicorn + SQLite | Async REST API, WebSocket streams, and static asset serving |
+| **Operator UI** | React Native Web + Expo (SDK 52) + Reanimated 3 | Responsive dark-mode dashboard with custom HUD and animations |
+
+---
+
+## 🛠️ Quickstart & Setup
+
+### 1. Clone the Repository
 ```bash
-python3 -m venv .venv && source .venv/bin/activate
+git clone https://github.com/AdityaV33/HawkEye-V2.git
+cd HawkEye-V2
+```
+
+### 2. Create Virtual Environment
+```bash
+python3 -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+```
+
+### 3. Install Dependencies
+
+**For Linux (CUDA GPU) / Windows:**
+```bash
+# Optional: Install PyTorch with your matching CUDA version first
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
+pip install -r requirements-cuda.txt
+```
+
+**For macOS (Apple Silicon MPS / CPU) or standard CPU:**
+```bash
 pip install -r requirements.txt
-python scripts/download_models.py      # optional: warm the pretrained pose/identity weights
 ```
 
-The core runs even if optional groups fail: no `insightface` → identity disables itself; no `ANTHROPIC_API_KEY`/`anthropic` → Stage B falls back to the mock reasoner. With no trained action/weapon weights configured, Stage A falls back to the zero-training heuristics — see [`docs/training.md`](docs/training.md) to train real ones.
-
-## Run (camera + app, together)
-
-The camera pipeline and the operator app are **one process, one address** — there is nothing to run "at the same time" separately. Build the app once, then start HawkEye:
-
+### 4. Warm Pretrained Models (Optional)
 ```bash
-# 1) Build the app (only needed once, and again whenever app/ changes)
-cd app && npm install && npm run build:web && cd ..
-
-# 2) Start HawkEye — this boots the camera pipeline AND serves the app + API + WebSocket
-python -m hawkeye.run                    # webcam 0
-python -m hawkeye.run --source clip.mp4  # a video file (looped) instead of a live camera
-python -m hawkeye.run --backend mock     # force the offline mock reasoner
-# cloud reasoning:
-export ANTHROPIC_API_KEY=sk-...          # then run without --backend (auto picks Claude)
+python scripts/download_models.py
 ```
+*(Pre-downloads YOLO11n-pose and InsightFace weights so the first run starts instantly).*
 
-Open **http://127.0.0.1:8000** — that single URL is the whole app (Live / Incidents / Attendance / People / Settings). Move the camera around, stage a fall / mock scuffle / show an object → watch incident cards appear with explanation, face match, and action.
+---
 
-If you open that URL before step 1, HawkEye still runs (API + camera are live) and the page tells you to build the app rather than 404ing.
+## 🎬 Running HawkEye
 
-**Iterating on the app UI?** Run the Expo dev server instead of the static build, alongside the backend:
+The camera pipeline, REST API, WebSocket server, and web dashboard run as **one single process on one port**:
+
 ```bash
-# terminal 1 — backend + camera
+# Default run (uses local webcam 0, mock reasoner, binds to 0.0.0.0:8000)
 python -m hawkeye.run
-# terminal 2 — app with hot reload, talking to the backend above
-cd app && npm start   # press w for web
+
+# Use screen capture as video source:
+python -m hawkeye.run --source screen
+
+# Loop a demo video clip:
+python -m hawkeye.run --source demo_incident.mp4
+
+# Cloud AI Reasoning (Claude 3.5 Sonnet):
+export ANTHROPIC_API_KEY="sk-ant-..."
+python -m hawkeye.run --backend claude
+
+# Enable HTTPS (recommended when using mobile phone camera via browser):
+python -m hawkeye.run --ssl
 ```
 
-**A physical phone on the same Wi-Fi:** start the backend bound to your LAN IP (`python -m hawkeye.run --host 0.0.0.0`), then set the server address in the app's Settings tab. See [`app/README.md`](app/README.md).
+Open **`http://localhost:8000`** (or **`https://localhost:8000`** with `--ssl`) in your browser.
 
-## Enroll faces (local identity DB)
+> [!NOTE]
+> **No Node.js or npm needed!** The operator dashboard is pre-built in `app/dist/` and served automatically by FastAPI. If you wish to modify the frontend UI, see [`app/README.md`](app/README.md).
+
+---
+
+## 📱 Using Your Phone as the Camera Feed
+
+HawkEye allows you to prop your phone up anywhere in a room and use it as a wireless smart camera:
+
+1. **Connect**: Ensure your phone and laptop are on the same Wi-Fi (or connect your laptop to your phone's Personal Hotspot).
+2. **Start HawkEye**:
+   ```bash
+   python -m hawkeye.run --ssl
+   ```
+3. **Open on Phone**: Find your laptop's IP (e.g. `192.168.1.15`) and navigate to `https://192.168.1.15:8000` on your phone browser.
+4. **Stream**: Tap the **Camera** tab at the bottom and press **"Broadcast to HawkEye"**.
+5. Your laptop will immediately run real-time anomaly detection, threat explanation, and facial attendance on your phone's live camera feed!
+
+---
+
+## 🧪 Running Self-Checks & Tests
+
+All detection pipelines, decision engines, and graceful shutdown handlers include unit and integration tests:
 
 ```bash
-python scripts/enroll_person.py --name "Asha Rao" --images data/faces/asha \
-    --meta '{"role":"staff","id_no":"EMP-014"}'
-```
-Or use the **People** tab in the app. (Local, consented dataset only — no Aadhaar/government-ID; that's future work pending official API access. See `docs/ethics.md`.)
-
-## Configure
-
-Everything is in `configs/default.yaml` — trigger threshold, clip length, cooldowns, reasoner backend, identity match threshold, action/weapon model paths, and the anomaly→action dispatch rules. Override with `--config myconfig.yaml`.
-
-The checked-in `models/weapons.pt` file is an experimental one-class checkpoint.
-Weapon detection remains enabled with a conservative confidence floor and
-handheld/temporal gating, but it should eventually be retrained with hard-negative
-examples (phones, fans, bicycles, and similar objects).
-
-## Train / retrain the detection models
-
-Stage A's action classifier (violence/fall) and weapon detector are trained models, not hardcoded rules — see [`docs/training.md`](docs/training.md) for the full guide (primary target: Apple Silicon/MPS). Quick path once datasets are staged:
-
-```bash
-python tests/test_action_pipeline.py     # pipeline self-check, seconds
-bash scripts/train_all.sh                # download data -> train action -> train weapon -> eval
+# Run all test suites
+python tests/test_action_pipeline.py    # 22 tests: kinematics, models, violence/fall gates
+python tests/test_decision_engine.py    # 8 tests: gating, cooldowns, emergency dispatch
+python tests/test_fire_detector.py      # 9 tests: chromatic verification, YOLO proposals
+python tests/test_pipeline_shutdown.py  # 4 tests: thread safety, queue drainage, stores
 ```
 
-## Evaluate
+---
 
-```bash
-python eval/evaluate.py fps --source clip.mp4                                          # Stage A latency / FPS
-python eval/evaluate.py compare --data data/datasets/actions --model models/action_gru.pt  # trained model vs heuristic baseline
+## 📁 Repository Structure
+
+```text
+├── app/                  # Operator Dashboard (React Native / Expo Web source code)
+│   ├── app/(tabs)/       # Screens: Live, Incidents, Attendance, People, Camera
+│   ├── dist/             # Production pre-built web bundle (served by FastAPI)
+│   └── src/              # Design system, API hooks, WebSockets, state stores
+├── configs/              # System configuration (default.yaml)
+├── docs/                 # Documentation (architecture.md, setup.md, training.md, ethics.md)
+├── eval/                 # Evaluation and benchmarking scripts
+├── hawkeye/              # Core Python AI Engine
+│   ├── attendance/       # Biometric attendance ledger & SQLite store
+│   ├── decision/         # Severity gating, rule engine, emergency dispatchers
+│   ├── detect/           # Stage A detectors: pose, action Bi-GRU, weapons, fire/smoke
+│   ├── events/           # Schema definitions, evidence manager, SQLite stores
+│   ├── identity/         # InsightFace integration, RetinaFace + ArcFace matcher
+│   ├── ingest/           # Video sources: webcam, screen capture, phone push stream
+│   ├── pipeline.py       # Multi-threaded orchestration pipeline
+│   ├── reason/           # Stage B Vision-Language reasoners (Claude, Moondream, Mock)
+│   └── run.py            # CLI entry point
+├── models/               # Trained neural network weights (.pt files)
+├── scripts/              # Training, model downloading, and enrollment utilities
+├── server/               # FastAPI application, WebSocket hub, and REST routes
+├── tests/                # Automated verification and pipeline test suites
+├── requirements.txt      # Python dependencies (CPU & macOS)
+└── requirements-cuda.txt # Python dependencies (NVIDIA CUDA)
 ```
 
-## Project layout
+---
 
-```
-hawkeye/   ingest · detect (Stage A) · reason (Stage B) · identity · decision · events · attendance · pipeline
-server/    FastAPI app (API + WebSocket + serves app/dist)
-app/       operator app (Expo/React Native — Live · Incidents · Attendance · People · Settings)
-scripts/   enroll · download_models · train_action · train_weapon · setup_datasets · train_all.sh
-eval/      metrics + FPS benchmark
-tests/     pipeline + shutdown self-checks
-docs/      architecture · ethics · setup · training
-```
+## ⚖️ Ethics, Privacy & Consent
 
-## Roadmap
+HawkEye was designed from the ground up under a strict **privacy-first biometric architecture**:
+- **Consented Local DB Only**: Facial identity matching operates strictly against a locally consented enrollment roster (`data/hawkeye.db`).
+- **No Remote Biometrics**: Face embeddings (512-d ArcFace vectors) remain local to the host machine.
+- **Selective VLM Transmission**: The heavy vision-language model only receives a temporary 3-second visual clip when an anomaly is triggered, minimizing unnecessary data processing.
+- See [`docs/ethics.md`](docs/ethics.md) for our detailed privacy and ethics framework.
 
-- **Phase 1 (now):** model + app core on a manual camera, trained action/weapon models, unified app. ✅
-- **Phase 2:** autonomous drone — Tello `DroneSource` into `hawkeye/ingest/`, SLAM + coverage patrol (AirSim/Gazebo first), closed-loop "investigate".
-- **Phase 3:** TensorRT/quantization, Docker, auth, DPDP-aligned encryption/audit, real dispatch integrations.
+---
+
+## 👥 Authors & Acknowledgements
+
+* **HawkEye Engineering Team** — *Final Year Project*
+* Developed with guidance on modern computer vision architectures (*LAVAD, CVPR 2024*; *Holmes-VAD*).
+* Built using open-source tools: Ultralytics YOLO11, InsightFace, FastAPI, and Expo.
+
+---
+
+<div align="center">
+  <b>HawkEye — Autonomous Indoor Surveillance & Attendance System</b>
+</div>

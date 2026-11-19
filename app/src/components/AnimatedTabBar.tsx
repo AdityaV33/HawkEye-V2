@@ -23,7 +23,7 @@ const ICONS: Record<string, { on: keyof typeof Ionicons.glyphMap; off: keyof typ
   incidents: { on: 'alert-circle', off: 'alert-circle-outline', label: 'Incidents' },
   attendance: { on: 'people', off: 'people-outline', label: 'Attendance' },
   people: { on: 'person-add', off: 'person-add-outline', label: 'People' },
-  drone: { on: 'navigate', off: 'navigate-outline', label: 'Drone' },
+  camera: { on: 'camera', off: 'camera-outline', label: 'Camera' },
 };
 
 function TabItem({

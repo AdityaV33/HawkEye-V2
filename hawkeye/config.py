@@ -91,7 +91,7 @@ class IdentityConfig(BaseModel):
     match_threshold: float = 0.42
     model_name: str = "buffalo_l"
     det_size: int = 640
-    attendance_enabled: bool = True        # continuous face-recognition attendance
+    attendance_enabled: bool = True       # continuous face-recognition attendance
     attendance_interval_sec: float = 0.5   # how often to scan the frame for members (responsive)
 
 
@@ -111,7 +111,7 @@ class StorageConfig(BaseModel):
 
 
 class ServerConfig(BaseModel):
-    host: str = "127.0.0.1"
+    host: str = "0.0.0.0"
     port: int = 8000
 
 

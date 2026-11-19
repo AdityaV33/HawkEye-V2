@@ -17,7 +17,7 @@ roadmap and `.claude/plans/`).
 | **Incidents** | Full incident feed with severity filters and tap-through detail (AI assessment, identity match, detection + response). |
 | **Attendance** | Per-day presence of enrolled people, with a date stepper. |
 | **People** | Identity roster + photo enrollment (multi-image) + removal. |
-| **Drone** | Contract-first preview of fleet control / patrol / manual override (Phase 3). |
+| **Camera** | Real-time source switcher & in-browser wireless phone camera broadcaster. |
 | **Settings** | Server address, live connection + health, about. |
 
 ## Architecture
@@ -83,6 +83,5 @@ Then open **Settings → Server**, enter your machine's LAN address (e.g.
 `http://192.168.1.42:8000`), and tap *Save & reconnect*. (Off-LAN access via a
 private VPN mesh is a Phase 2 item — the app is LAN-only today.)
 
-> Note: the backend binds `127.0.0.1` by default (`configs/default.yaml` →
-> `server.host`); `--host 0.0.0.0` overrides it for LAN demos without changing
-> product code.
+> Note: the backend binds `0.0.0.0` by default (`configs/default.yaml` →
+> `server.host`), making it accessible on the local network / Wi-Fi immediately.

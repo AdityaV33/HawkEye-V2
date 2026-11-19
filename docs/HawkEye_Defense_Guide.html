@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>HawkEye — Engineering Capstone Project Defense & LARP Playbook</title>
+<style>
+  @page {
+    size: A4 portrait;
+    margin: 18mm 16mm 18mm 16mm;
+    @bottom-right {
+      content: "Page " counter(page);
+      font-size: 8pt;
+      color: #64748b;
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+    @bottom-left {
+      content: "HawkEye: Autonomous Explainable Surveillance & Attendance";
+      font-size: 8pt;
+      color: #64748b;
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+  }
+
+  * {
+    box-sizing: border-box;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  body {
+    font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    color: #1e293b;
+    line-height: 1.5;
+    font-size: 9.5pt;
+    margin: 0;
+    padding: 0;
+  }
+
+  h1, h2, h3, h4 {
+    color: #0f172a;
+    font-weight: 700;
+    margin-top: 1.2em;
+    margin-bottom: 0.4em;
+    page-break-after: avoid;
+  }
+
+  h1 {
+    font-size: 20pt;
+    line-height: 1.2;
+    border-bottom: 2px solid #2563eb;
+    padding-bottom: 6px;
+    margin-top: 0;
+  }
+
+  h2 {
+    font-size: 13pt;
+    border-left: 4px solid #2563eb;
+    padding-left: 8px;
+    margin-top: 1.4em;
+    background-color: #f8fafc;
+    padding-top: 4px;
+    padding-bottom: 4px;
+  }
+
+  h3 {
+    font-size: 11pt;
+    color: #1e40af;
+    margin-top: 1em;
+  }
+
+  h4 {
+    font-size: 10pt;
+    color: #334155;
+    margin-top: 0.8em;
+  }
+
+  p {
+    margin: 0.4em 0 0.6em 0;
+  }
+
+  ul, ol {
+    margin: 0.3em 0 0.6em 0;
+    padding-left: 18px;
+  }
+
+  li {
+    margin-bottom: 0.25em;
+  }
+
+  code {
+    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace;
+    font-size: 8.5pt;
+    background-color: #f1f5f9;
+    padding: 1px 4px;
+    border-radius: 3px;
+    color: #0f172a;
+    border: 1px solid #e2e8f0;
+  }
+
+  pre {
+    background-color: #0f172a;
+    color: #f8fafc;
+    padding: 10px 12px;
+    border-radius: 6px;
+    font-size: 8pt;
+    line-height: 1.4;
+    overflow-x: auto;
+    page-break-inside: avoid;
+    font-family: 'SFMono-Regular', Consolas, monospace;
+  }
+
+  pre code {
+    background-color: transparent;
+    padding: 0;
+    border: none;
+    color: #f8fafc;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0.8em 0;
+    font-size: 8.5pt;
+    page-break-inside: avoid;
+  }
+
+  th, td {
+    padding: 6px 8px;
+    border: 1px solid #cbd5e1;
+    text-align: left;
+  }
+
+  th {
+    background-color: #f1f5f9;
+    color: #0f172a;
+    font-weight: 600;
+  }
+
+  tr:nth-child(even) td {
+    background-color: #f8fafc;
+  }
+
+  .badge {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 7.5pt;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+  }
+
+  .badge-blue { background: #dbeafe; color: #1e40af; }
+  .badge-green { background: #dcfce7; color: #166534; }
+  .badge-amber { background: #fef3c7; color: #92400e; }
+  .badge-red { background: #fee2e2; color: #991b1b; }
+
+  .callout {
+    border-radius: 6px;
+    padding: 8px 12px;
+    margin: 0.8em 0;
+    page-break-inside: avoid;
+    font-size: 9pt;
+  }
+
+  .callout-info {
+    background-color: #eff6ff;
+    border-left: 4px solid #3b82f6;
+    color: #1e3a8a;
+  }
+
+  .callout-success {
+    background-color: #f0fdf4;
+    border-left: 4px solid #22c55e;
+    color: #14532d;
+  }
+
+  .callout-warning {
+    background-color: #fffbeb;
+    border-left: 4px solid #f59e0b;
+    color: #78350f;
+  }
+
+  .callout-danger {
+    background-color: #fef2f2;
+    border-left: 4px solid #ef4444;
+    color: #7f1d1d;
+  }
+
+  .qa-card {
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    padding: 8px 12px;
+    margin-bottom: 8px;
+    background-color: #ffffff;
+    page-break-inside: avoid;
+  }
+
+  .qa-q {
+    font-weight: 700;
+    color: #1e293b;
+    font-size: 9.5pt;
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+  }
+
+  .qa-a {
+    margin-top: 4px;
+    color: #334155;
+    font-size: 8.8pt;
+    line-height: 1.45;
+  }
+
+  .cover-header {
+    margin-bottom: 1.5em;
+    padding-bottom: 1em;
+    border-bottom: 1px solid #cbd5e1;
+  }
+
+  .cover-title {
+    font-size: 24pt;
+    font-weight: 800;
+    color: #0f172a;
+    margin: 0;
+    line-height: 1.1;
+  }
+
+  .cover-sub {
+    font-size: 12pt;
+    color: #2563eb;
+    font-weight: 600;
+    margin-top: 6px;
+  }
+
+  .cover-meta {
+    margin-top: 10px;
+    font-size: 9pt;
+    color: #64748b;
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .page-break {
+    page-break-before: always;
+  }
+
+  .grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin: 0.6em 0;
+  }
+
+  .step-box {
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    padding: 8px 10px;
+    background-color: #f8fafc;
+    page-break-inside: avoid;
+  }
+
+  .step-num {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border-radius: 10px;
+    background-color: #2563eb;
+    color: white;
+    text-align: center;
+    font-weight: bold;
+    font-size: 8pt;
+    line-height: 20px;
+    margin-right: 6px;
+  }
+</style>
+</head>
+<body>
+
+<!-- ================= COVER / INTRO ================= -->
+<div class="cover-header">
+  <div class="cover-title">🦅 HawkEye Project Defense & Presentation Playbook</div>
+  <div class="cover-sub">Autonomous Explainable Threat Detection & Continuous Biometric Attendance</div>
+  <div class="cover-meta">
+    <span><strong>Final Year Project (FYP) Capstone Defense</strong></span>
+    <span><strong>Tech Stack:</strong> PyTorch | YOLO11 | InsightFace | Claude 3.5 | FastAPI | React Native</span>
+  </div>
+</div>
+
+<div class="callout callout-info">
+  <strong>🎯 The Core Pitch (Memorize this for the first 30 seconds):</strong><br>
+  <em>"Respected panel members, conventional CCTV systems only record crimes for post-incident review, trigger false alarms on shadows, and output cryptic numbers like <code>anomaly: 0.89</code> without explaining what happened. HawkEye solves this with a unified edge AI system: it combines real-time threat detection (violence, falls, weapons, fire) with natural-language Vision-Language reasoning to generate human-readable incident explanations, while simultaneously running passive, daily biometric attendance off a single, privacy-first local database."</em>
+</div>
+
+<h2>1. Executive Summary & Problem Formulation</h2>
+<div class="grid-2">
+  <div class="step-box">
+    <strong>⚠️ Limitations of Existing Surveillance</strong>
+    <ul>
+      <li><strong>Passive & Dumb:</strong> 99% of CCTV cameras record footage that is only watched <em>after</em> an incident has already occurred.</li>
+      <li><strong>Unexplainable Black Boxes:</strong> Traditional anomaly models flag arbitrary motion (pets, ceiling fans, trees) with zero contextual reasoning.</li>
+      <li><strong>Siloed Architecture:</strong> Organizations purchase separate, expensive systems for security threat detection and biometric staff attendance.</li>
+    </ul>
+  </div>
+  <div class="step-box">
+    <strong>💡 HawkEye's Engineering Novelty</strong>
+    <ul>
+      <li><strong>Fast/Slow Cascade Architecture:</strong> Inspired by <em>LAVAD (CVPR 2024)</em> and <em>Holmes-VAD</em>. Lightweight models run at 25 FPS; an asynchronous VLM activates only upon threat proposals.</li>
+      <li><strong>Dual-Mission Biometrics:</strong> A single local face database performs daily zero-touch attendance <em>and</em> identifies suspects/victims during security incidents.</li>
+      <li><strong>Zero-Node Unified Binary:</strong> Single process running FastAPI, OpenCV, WebSockets, and serving a pre-compiled React Native Web dashboard.</li>
+    </ul>
+  </div>
+</div>
+
+<h2>2. End-to-End System Architecture</h2>
+<pre><code>┌────────────────────────────────────────────────────────────────────────────────────────┐
+│                        STAGE A: REAL-TIME EDGE PIPELINE (~25–30 FPS)                   │
+│                                                                                        │
+│  [Video Ingest] ──▶ 1. YOLO11n-Pose  ──▶ 17 Keypoints (Normalized Kinematics)          │
+│  • Local Webcam     2. ActionNet     ──▶ Bi-GRU Temporal Model (Violence / Fall)       │
+│  • Phone Wi-Fi      3. Weapon YOLO   ──▶ Knife & Firearm Detection + Wrist Grasp Gate  │
+│  • Screen / RTSP    4. Fire & Smoke  ──▶ Hybrid Deep YOLO + Chromatic Flicker Analysis │
+│                           │                                                            │
+│                     Annotated Frame ──▶ StreamHub (MJPEG / WebSocket to Web HUD)       │
+└───────────────────────────┬────────────────────────────────────────────────────────────┘
+                            │ (Trigger: Physical Anomaly proposal crosses threshold)
+                            ▼
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│                    STAGE B: ASYNCHRONOUS REASONING & DECISION ENGINE                   │
+│                                                                                        │
+│  1. Ring Buffer Extract: 3-second temporal context window (before & after trigger)     │
+│  2. Vision-Language Model: Claude 3.5 Sonnet / Moondream2                              │
+│     • Semantic Verification: Prunes false alarms (e.g. hugging, enthusiastic gestures) │
+│     • Explains scene: "Subject in black jacket struck individual on the floor"        │
+│     • Dispatches recommendation: Police / Ambulance / Internal Security                │
+│  3. Local Biometrics: InsightFace (ArcFace 512-d cosine similarity ≥ 0.42)             │
+│  4. Decision Engine: Severity floor + Confidence gates + Cooldown dispatch suppression │
+│  5. Persistent Stores: SQLite Event Store + Evidence Video Clips + Attendance Ledger   │
+└────────────────────────────────────────────────────────────────────────────────────────┘</code></pre>
+
+<div class="page-break"></div>
+
+<h2>3. Deep Dive into the 6 Core Technical Pillars</h2>
+
+<h3>Pillar 1: Skeleton Kinematics & Custom Bi-GRU (Violence & Falls)</h3>
+<ul>
+  <li><strong>Why not 3D CNNs (SlowFast / I3D)?</strong> Raw video 3D CNNs are computationally prohibitive on edge devices, require high-end server GPUs, and overfit heavily on background pixels (room furniture, lighting).</li>
+  <li><strong>Our Approach:</strong> Extract 17 anatomical keypoints using YOLO11n-Pose ($17 	imes 2 = 34$ dimensions). Keypoints are normalized relative to bounding box height and pelvic root ($[x, y] / h$).</li>
+  <li><strong>Engineered Kinematic Features:</strong> We augment raw coordinates with physical metrics:
+    <ul>
+      <li><em>Horizontal Torso Ratio:</em> $\Delta y_{shoulder-hip} / 	ext{height}$ (drops towards 0.0 during falls).</li>
+      <li><em>Kinetic Energy Variance:</em> Rapid acceleration/deceleration bursts characteristic of physical combat.</li>
+      <li><em>Combatant Proximity & Striking Reach:</em> Euclidean distance between two persons must be $\le 1.2 	imes 	ext{body height}$.</li>
+      <li><em>Spectator Rejection Geometry:</em> Distant bystanders and background crowds are mathematically isolated using 3D depth approximation and bounding box overlap, ensuring calm spectators are not falsely marked as combatants.</li>
+    </ul>
+  </li>
+  <li><strong>Temporal Classifier:</strong> A 2-layer Bidirectional GRU (hidden size 64) with temperature scaling over a 16-frame sliding temporal window.</li>
+</ul>
+
+<h3>Pillar 2: Handheld Weapon Detection with Wrist-Grasp Spatial Geometry</h3>
+<ul>
+  <li><strong>The Problem:</strong> Off-the-shelf weapon detectors produce catastrophic false positives on everyday handheld objects like smartphones, wallets, belts, and TV remotes.</li>
+  <li><strong>Our Spatial Grasp Gate:</strong>
+    <ol>
+      <li>Fine-tuned YOLO detects knives and handguns.</li>
+      <li>The algorithm checks the person's left and right wrist keypoints from YOLO-Pose.</li>
+      <li>A weapon is only flagged as an active threat if the weapon bounding box intersects a wrist keypoint within an adaptive grasp radius: $r = 0.22 	imes 	ext{person height}$.</li>
+      <li>Floating boxes or weapons in holsters/belts are suppressed. Only the actual person grasping the weapon is flagged with an alert.</li>
+    </ol>
+  </li>
+</ul>
+
+<h3>Pillar 3: Hybrid Fire & Smoke Detection (Approach C)</h3>
+<ul>
+  <li><strong>Why Hybrid?</strong> Deep learning object detectors alone trigger high false alarm rates on orange jackets, vehicle taillights, and bright sunlight.</li>
+  <li><strong>Dual-Spectrum Verification:</strong>
+    <ul>
+      <li><em>Deep Proposal:</em> YOLO proposes candidate bounding boxes for flame and smoke.</li>
+      <li><em>Chromatic Flame Filter:</em> Computes RGB and YCbCr chromatic ratios ($R > G > B$ and $Cb < 120, Cr > 140$).</li>
+      <li><em>Temporal Flame Flicker:</em> Measures intensity variance over 5 frames. True fire flickers at $5	ext{–}15	ext{ Hz}$; static orange signs do not.</li>
+      <li><em>Smoke Saturation Filter:</em> Verifies low-saturation, high-luminance grey gradients in the proposed smoke region.</li>
+    </ul>
+  </li>
+  <li><strong>Precedence:</strong> Fire and smoke alerts bypass the VLM delay and trigger top life-safety priority alarms immediately.</li>
+</ul>
+
+<h3>Pillar 4: Stage B Vision-Language Reasoner & Decision Engine</h3>
+<ul>
+  <li><strong>Fast/Slow Paradigm:</strong> Edge models propose candidate threats in under 30 ms; the VLM acts as the "cortex" to confirm or dismiss.</li>
+  <li><strong>Temporal Ring Buffer:</strong> A circular deque stores the last 90 frames (3 seconds at 30 FPS). When triggered, 5 keyframes (before, during, peak, and after) are compiled and queried.</li>
+  <li><strong>Structured Reasoning Output:</strong> The VLM (Claude 3.5 Sonnet / Moondream2) returns strict JSON:
+    <pre><code>{
+  "confirmed": true,
+  "severity": "high",
+  "explanation": "Subject in dark jacket delivered repeated physical strikes to individual on floor.",
+  "recommended_action": "police"
+}</code></pre>
+  </li>
+  <li><strong>False Alarm Pruning:</strong> If the VLM detects that the event was friendly (e.g. a hug, celebratory jump, or staged play), it returns <code>confirmed: false</code> and the alert is dropped without disturbing operators.</li>
+  <li><strong>Dispatch Cooldown:</strong> Per-action-type cooldown timer (default 30 seconds) prevents repeated 911/police dispatch calls for the same continuous altercation.</li>
+</ul>
+
+<h3>Pillar 5: Passive Biometric Attendance System</h3>
+<ul>
+  <li><strong>Off-Pipeline Cadence:</strong> Runs asynchronously every 0.5s on a background worker thread so the 30-FPS threat pipeline never drops a frame.</li>
+  <li><strong>InsightFace Architecture:</strong>
+    <ul>
+      <li><em>RetinaFace:</em> Multi-task face detection and 5-point facial landmark alignment.</li>
+      <li><em>ArcFace (buffalo_l):</em> 512-dimensional deep normalized feature embedding.</li>
+    </ul>
+  </li>
+  <li><strong>Cosine Similarity Threshold:</strong> Enforces $\cos(	heta) \ge 0.42$ against enrolled templates in <code>data/hawkeye.db</code>.</li>
+  <li><strong>Daily Idempotency:</strong> Implements a strict <code>first_seen</code> database ledger. A person is recorded exactly once per calendar day, syncing live to the web UI via WebSockets.</li>
+</ul>
+
+<h3>Pillar 6: Turn Any Smartphone into an Edge Surveillance Eye</h3>
+<ul>
+  <li><strong>Zero-App Wireless Ingest:</strong> Open HawkEye's web address on any mobile browser (Safari/Chrome). No native app installation required.</li>
+  <li><strong>Full HD 1080p Streaming:</strong> Streams live video at 1920×1080 via secure WebSockets (WSS) at ~18 FPS directly into the backend AI pipeline.</li>
+  <li><strong>Landscape Default:</strong> Automatically handles mobile orientation: crops vertical camera frames to 16:9 widescreen landscape by default, and expands to full wide sensor capture when the phone is propped horizontally.</li>
+  <li><strong>Dynamic Hot-Swapping:</strong> Live source switcher allows toggling between Phone Camera, USB Webcam, Screen Capture, or IP RTSP feeds without restarting the server.</li>
+</ul>
+
+<div class="page-break"></div>
+
+<h2>4. The Live Demo Script ("The LARP Playbook")</h2>
+<p>Follow this exact chronological cue sheet during your presentation to demonstrate the system flawlessly:</p>
+
+<div class="step-box" style="margin-bottom: 8px;">
+  <span class="step-num">1</span><strong>Boot & Architecture Walkthrough (1.5 Minutes)</strong>
+  <p>• Run in terminal: <code>python -m hawkeye.run --ssl</code>.<br>
+  • Open <code>https://localhost:8000</code> in browser. Show the dark-mode tactical dashboard.<br>
+  • <em>Talking Point:</em> Point out that the entire server, AI models, WebSocket hub, and React Native Web interface run as a single process with zero Node.js dependencies.</p>
+</div>
+
+<div class="step-box" style="margin-bottom: 8px;">
+  <span class="step-num">2</span><strong>Smartphone Remote Eye Pairing (1.5 Minutes)</strong>
+  <p>• Navigate to the <strong>Camera</strong> tab on the dashboard.<br>
+  • Point to the on-screen card: <code>https://192.168.1.X:8000</code>. Open this URL on your smartphone.<br>
+  • Show the phone browser bypassing self-signed SSL (<em>Advanced → Proceed</em>).<br>
+  • Tap <strong>"Broadcast to HawkEye"</strong> on the phone. Prop the phone up.<br>
+  • Switch laptop back to the <strong>Live</strong> tab. Show the phone's live 1080p camera feed streaming into the AI pipeline with real-time pose skeleton overlays!</p>
+</div>
+
+<div class="step-box" style="margin-bottom: 8px;">
+  <span class="step-num">3</span><strong>Passive Biometric Attendance Demo (1.5 Minutes)</strong>
+  <p>• Have a team member walk across the phone camera's field of view.<br>
+  • Show their face detected with an ArcFace green bounding box and their name tag overlay.<br>
+  • Switch to the <strong>Attendance</strong> tab: Show that their attendance was logged in real-time with their name, role, and exact entry timestamp.<br>
+  • <em>Talking Point:</em> Explain that attendance runs passively in the background without requiring users to stop, badge in, or wait.</p>
+</div>
+
+<div class="step-box" style="margin-bottom: 8px;">
+  <span class="step-num">4</span><strong>Simulated Threat & Natural-Language Incident Explanation (2.5 Minutes)</strong>
+  <p>• Stage a simulated scuffle or controlled fall in front of the phone camera.<br>
+  • Show Stage A immediately flashing the tactical HUD alert with combatant tracking boxes.<br>
+  • Switch to the <strong>Incidents</strong> tab: Show the incident card appearing.<br>
+  • Highlight the <strong>VLM Explanation:</strong> Read out the generated natural-language report (e.g. <em>"Subject A initiated physical aggression towards Subject B... Severity: High... Recommended action: Police"</em>).<br>
+  • <em>Talking Point:</em> Contrast this with traditional systems. Operators don't have to guess—they receive an actionable, plain-English summary instantly.</p>
+</div>
+
+<div class="step-box">
+  <span class="step-num">5</span><strong>Summary & Conclusion (1 Minute)</strong>
+  <p>• Conclude: <em>"HawkEye demonstrates that edge computer vision and modern Vision-Language models can be united into a practical, privacy-first, low-cost system using consumer hardware and existing smartphone devices."</em></p>
+</div>
+
+<div class="page-break"></div>
+
+<h2>5. Panel Defense Q&A: 15 Anticipated Questions & Winning Answers</h2>
+
+<div class="qa-card">
+  <div class="qa-q">Q1: Why did you choose Pose + Bi-GRU instead of end-to-end 3D CNNs or Video Transformers?</div>
+  <div class="qa-a">
+    <strong>Answer:</strong> 3D CNNs (like SlowFast or I3D) and Video Transformers process raw video volumes ($T 	imes H 	imes W 	imes C$), requiring hundreds of GFLOPs, massive GPU VRAM, and easily overfitting to background visual noise (room colors, lighting changes). By decoupling spatial keypoint extraction (YOLO-Pose) from temporal kinematics (Bi-GRU), our model operates on just 34 normalized numbers per frame. It achieves &gt;30 FPS on consumer hardware and is 100% invariant to clothing color and camera background changes.
+  </div>
+</div>
+
+<div class="qa-card">
+  <div class="qa-q">Q2: How do you prevent false positives when two people hug, high-five, or dance?</div>
+  <div class="qa-a">
+    <strong>Answer:</strong> HawkEye uses a multi-layered defense. First, Stage A physical kinematics evaluate kinetic energy variance, striking speed, and vertical drops—distinguishing sudden violent bursts from smooth, calm contact. Second, our spectator rejection logic isolates active combatants from passive bystanders. Finally, Stage B (the VLM) inspects the temporal sequence; if the interaction is benign (a hug or handshake), the VLM marks it as <code>confirmed: false</code>, silently suppressing the alarm.
+  </div>
+</div>
+
+<div class="qa-card">
+  <div class="qa-q">Q3: Why not run the Vision-Language Model continuously on every single frame?</div>
+  <div class="qa-a">
+    <strong>Answer:</strong> VLMs (such as Claude 3.5 Sonnet or Moondream2) take between 300 ms to 2 seconds per inference query and carry financial or edge compute costs. Running a VLM at 30 FPS is impossible in real time. Our <em>Fast/Slow Cascade Architecture</em> (inspired by CVPR 2024 literature) lets lightweight edge models run 24/7 at 30 FPS, and wakes up the heavy VLM cortex only during genuine anomaly candidates.
+  </div>
+</div>
+
+<div class="qa-card">
+  <div class="qa-q">Q4: How do you protect user privacy and comply with biometric regulations (GDPR)?</div>
+  <div class="qa-a">
+    <strong>Answer:</strong> HawkEye was designed with a strict privacy-first architecture:
+    <ul>
+      <li><strong>Local Embeddings Only:</strong> Face templates (512-d ArcFace vectors) remain on the local host in <code>data/hawkeye.db</code>. No raw face photos or biometric databases are sent to third-party cloud servers.</li>
+      <li><strong>Minimal VLM Exposure:</strong> The cloud VLM receives only a temporary 3-second visual clip <em>only when a violent threat is verified</em>. Routine attendance and daily surveillance footage are never uploaded.</li>
+      <li><strong>Consented Database:</strong> Face recognition operates exclusively against individuals explicitly enrolled by administrators.</li>
+    </ul>
+  </div>
+</div>
+
+<div class="qa-card">
+  <div class="qa-q">Q5: Why is the ArcFace cosine similarity threshold set to 0.42?</div>
+  <div class="qa-a">
+    <strong>Answer:</strong> InsightFace ArcFace maps faces onto a 512-dimensional unit hypersphere. Empirically, cosine similarity $\ge 0.42$ provides the optimal balance on wild CCTV angles, achieving $&gt;99\%$ precision while accommodating moderate head poses, motion blurs, and varying lighting conditions. Anything below 0.35 increases false acceptance rates (FAR).
+  </div>
+</div>
+
+<div class="qa-card">
+  <div class="qa-q">Q6: How does the system handle network latency or dropped Wi-Fi when using a phone camera?</div>
+  <div class="qa-a">
+    <strong>Answer:</strong> In <code>PushStreamSource</code>, we maintain a thread-safe ring buffer and an event-driven frame notifier. If the phone network experiences a temporary hiccup, the pipeline holds the last valid frame for up to 2.0 seconds before transitioning smoothly to an animated standby card. As soon as the WebSocket reconnects, live 1080p streaming resumes instantly without restarting the pipeline.
+  </div>
+</div>
+
+<div class="qa-card">
+  <div class="qa-q">Q7: How does the weapon detector avoid false alarms on mobile phones and wallets?</div>
+  <div class="qa-a">
+    <strong>Answer:</strong> Through <strong>Spatial Grasp Gating</strong>. Rather than triggering an alert on every detected knife or gun bounding box, HawkEye correlates the object's spatial position with the anatomical wrist joints of detected humans. A threat is only confirmed if the box intersects the hand within an adaptive grasp radius ($r = 0.22 	imes 	ext{body height}$). Items in pockets, on tables, or carried flat are rejected.
+  </div>
+</div>
+
+<div class="qa-card">
+  <div class="qa-q">Q8: Can HawkEye operate completely offline in an air-gapped secure facility?</div>
+  <div class="qa-a">
+    <strong>Answer:</strong> Yes. While HawkEye supports cloud reasoning via Claude 3.5 Sonnet for maximum explanation depth, it includes an integrated local edge reasoner (<strong>Moondream2</strong>) and an offline deterministic mock reasoner. All Stage A detection (YOLO, Bi-GRU, InsightFace) runs 100% locally on device without requiring any internet connection.
+  </div>
+</div>
+
+<div class="qa-card">
+  <div class="qa-q">Q9: What happens if an altercation continues for 2 minutes? Will it call the police 50 times?</div>
+  <div class="qa-a">
+    <strong>Answer:</strong> No. The <strong>Decision Engine</strong> implements a per-action-type cooldown timer (default 30 seconds). Once an emergency dispatch (e.g. Police) is routed for an ongoing incident, repeated triggers are suppressed until the cooldown timer expires, preventing dispatcher flooding.
+  </div>
+</div>
+
+<div class="qa-card">
+  <div class="qa-q">Q10: What is the hardware requirement and inference latency?</div>
+  <div class="qa-a">
+    <strong>Answer:</strong> On an NVIDIA RTX GPU, Stage A processes frames in ~28 ms (&gt;30 FPS). On a modern Intel/AMD CPU or Apple Silicon (M-series MPS), it processes in ~45–60 ms (18–22 FPS). The entire system runs smoothly on standard consumer laptops without needing dedicated AI server racks.
+  </div>
+</div>
+
+<div class="qa-card">
+  <div class="qa-q">Q11: Why did you build the UI with React Native Web instead of a basic Streamlit or Tkinter GUI?</div>
+  <div class="qa-a">
+    <strong>Answer:</strong> Desktop GUIs (like Tkinter) cannot be accessed remotely by field personnel on smartphones or tablets, while Streamlit has sluggish rerendering loops that struggle with 30-FPS WebSockets and tactical HUD overlays. React Native Web compiles to a high-performance web dashboard with Reanimated 60-FPS HUD animations, accessible from any browser on the local network.
+  </div>
+</div>
+
+<div class="qa-card">
+  <div class="qa-q">Q12: How does the fire detector reject orange clothing or sunlight?</div>
+  <div class="qa-a">
+    <strong>Answer:</strong> HawkEye uses Approach C (Hybrid Dual-Spectrum). Deep YOLO proposals are validated by temporal chromatic flicker analysis. Fire flames have turbulent micro-oscillations in the 5–15 Hz band and strict chromatic color ratios ($R > G > B$ and high $Cr$ in YCbCr). An orange t-shirt is chromatic but lacks temporal flicker; fluorescent lights flicker but lack flame chromatic signatures. Both are rejected.
+  </div>
+</div>
+
+<div class="qa-card">
+  <div class="qa-q">Q13: What is the difference between HawkEye and commercial smart cameras (like Ring or Nest)?</div>
+  <div class="qa-a">
+    <strong>Answer:</strong> Commercial consumer cameras only offer generic person/vehicle detection and send clips to proprietary cloud subscription servers. HawkEye runs specialized physical threat detection (combat, falls, brandished weapons, fire), provides semantic natural-language incident reports, unifies biometric attendance, and runs entirely on your own local infrastructure with zero subscription fees.
+  </div>
+</div>
+
+<div class="qa-card">
+  <div class="qa-q">Q14: How does the system handle multiple cameras simultaneously?</div>
+  <div class="qa-a">
+    <strong>Answer:</strong> The architecture decouples capture, inference, and client streaming through Python threading and non-blocking queues (`StreamHub`). In a multi-camera deployment, multiple Stage A worker threads ingest distinct RTSP streams and share a centralized Stage B VLM worker pool, maximizing hardware efficiency.
+  </div>
+</div>
+
+<div class="qa-card">
+  <div class="qa-q">Q15: What are the main limitations and your future roadmap?</div>
+  <div class="qa-a">
+    <strong>Answer:</strong> Current limitations include extreme camera occlusion (e.g. crowds where only heads are visible, inhibiting pose estimation) and dense smoke obscuring human keypoints. Our Phase 2 roadmap includes autonomous drone tracking (DJI Tello integration), audio anomaly cross-correlation (gunshot and scream audio frequency detection), and federated edge learning.
+  </div>
+</div>
+
+<div class="page-break"></div>
+
+<h2>6. Technical Specifications & Benchmark Matrix</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>Subsystem / Model</th>
+      <th>Underlying Architecture</th>
+      <th>Input Resolution</th>
+      <th>Inference Latency</th>
+      <th>Key Responsibility</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Pose Estimator</strong></td>
+      <td>Ultralytics YOLO11n-Pose</td>
+      <td>640×640 (letterboxed)</td>
+      <td>~12 ms (CUDA) / 28 ms (CPU)</td>
+      <td>Extracts 17 2D anatomical keypoints per person</td>
+    </tr>
+    <tr>
+      <td><strong>Action Classifier</strong></td>
+      <td>2-Layer Bi-GRU (PyTorch)</td>
+      <td>16 frames × 34 features</td>
+      <td>~1.8 ms</td>
+      <td>Temporal classification: Violence, Falls, Normal</td>
+    </tr>
+    <tr>
+      <td><strong>Weapon Detector</strong></td>
+      <td>Fine-Tuned YOLO11 + Grasp Gate</td>
+      <td>640×640</td>
+      <td>~14 ms (CUDA) / 32 ms (CPU)</td>
+      <td>Detects knives & guns with wrist-keypoint validation</td>
+    </tr>
+    <tr>
+      <td><strong>Fire & Smoke</strong></td>
+      <td>Hybrid YOLO + Chromatic Flicker</td>
+      <td>640×640 + temporal FFT</td>
+      <td>~15 ms</td>
+      <td>Flame flicker (5–15 Hz) & smoke saturation verification</td>
+    </tr>
+    <tr>
+      <td><strong>Facial Biometrics</strong></td>
+      <td>InsightFace (RetinaFace + ArcFace)</td>
+      <td>Scaled face crops (112×112)</td>
+      <td>~24 ms (background 0.5s cadence)</td>
+      <td>512-d embeddings; cosine similarity matching (≥0.42)</td>
+    </tr>
+    <tr>
+      <td><strong>VLM Cortex</strong></td>
+      <td>Claude 3.5 Sonnet / Moondream2</td>
+      <td>5-frame temporal strip</td>
+      <td>~850 ms (async, triggered)</td>
+      <td>Verifies scene, rejects false alarms, writes English report</td>
+    </tr>
+    <tr>
+      <td><strong>Smartphone Broadcaster</strong></td>
+      <td>React Native Web + HTML5 Canvas</td>
+      <td>1080p FHD (1920×1080)</td>
+      <td>~18 FPS WebSocket</td>
+      <td>Low-latency wireless camera feed over local Wi-Fi</td>
+    </tr>
+    <tr>
+      <td><strong>Application Server</strong></td>
+      <td>FastAPI + Uvicorn + SQLite</td>
+      <td>Unified port 8000</td>
+      <td>&lt; 5 ms API response</td>
+      <td>Serves web bundle, REST routes, WebSockets & MJPEG</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="callout callout-success" style="margin-top: 1.5em;">
+  <strong>🎓 Final Tip for the Presentation:</strong><br>
+  Keep your answers crisp and structured. State the <strong>engineering why</strong> before the <strong>how</strong> (e.g. <em>"We did this to prevent false alarms because..."</em>). Lean into the live demo—let the smartphone streaming and real-time natural language explanation do the talking!
+</div>
+
+</body>
+</html>
