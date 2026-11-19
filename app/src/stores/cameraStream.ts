@@ -1,26 +1,40 @@
 /**
  * Persistent camera streaming store.
  *
- * Keeps the phone camera active and broadcasts JPEG frames to the HawkEye
- * server (/ws/camera) over WebSocket. Designed to survive tab switches so the
- * user can leave the phone propped up in the Camera tab, tap Broadcast, and
- * freely view the Live tab while the phone continues to stream frames.
+ * Keeps the phone camera active and broadcasts high-definition JPEG frames
+ * to the HawkEye server (/ws/camera) over WebSocket in 16:9 landscape format.
+ * Defaults to Full HD (1080p) landscape with smart cropping when held in portrait
+ * and native wide capture when held horizontally.
  */
 import { Platform } from 'react-native';
 import { create } from 'zustand';
 
-type FacingMode = 'environment' | 'user';
+export type FacingMode = 'environment' | 'user';
+export type StreamResolution = '1080p' | '720p' | '540p';
+
+export const RESOLUTION_CONFIG: Record<
+  StreamResolution,
+  { width: number; height: number; quality: number; label: string }
+> = {
+  '1080p': { width: 1920, height: 1080, quality: 0.75, label: 'Full HD (1080p)' },
+  '720p': { width: 1280, height: 720, quality: 0.70, label: 'HD (720p)' },
+  '540p': { width: 960, height: 540, quality: 0.65, label: 'SD (540p)' },
+};
 
 type CameraStreamState = {
   isCameraActive: boolean;
   isBroadcasting: boolean;
   facingMode: FacingMode;
+  resolution: StreamResolution;
+  isLandscape: boolean;
   fps: number;
   framesSent: number;
   error: string | null;
 
   // Actions
-  startCamera: (facing?: FacingMode) => Promise<boolean>;
+  setResolution: (res: StreamResolution) => Promise<void>;
+  requestLandscape: () => Promise<void>;
+  startCamera: (facing?: FacingMode, res?: StreamResolution) => Promise<boolean>;
   stopCamera: () => void;
   toggleFacing: () => Promise<void>;
   startBroadcasting: (serverBase: string) => void;
@@ -33,7 +47,6 @@ let broadcastWs: WebSocket | null = null;
 let broadcastInterval: any = null;
 let offscreenCanvas: HTMLCanvasElement | null = null;
 let attachedVideoEl: HTMLVideoElement | null = null;
-let lastFrameCount = 0;
 let lastFpsTs = Date.now();
 let framesInSecond = 0;
 
@@ -41,6 +54,8 @@ export const useCameraStream = create<CameraStreamState>((set, get) => ({
   isCameraActive: false,
   isBroadcasting: false,
   facingMode: 'environment',
+  resolution: '1080p',
+  isLandscape: true,
   fps: 0,
   framesSent: 0,
   error: null,
@@ -53,13 +68,36 @@ export const useCameraStream = create<CameraStreamState>((set, get) => ({
     }
   },
 
-  startCamera: async (facing) => {
+  setResolution: async (res: StreamResolution) => {
+    set({ resolution: res });
+    if (get().isCameraActive) {
+      await get().startCamera(get().facingMode, res);
+    }
+  },
+
+  requestLandscape: async () => {
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      try {
+        if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+          await document.documentElement.requestFullscreen().catch(() => {});
+        }
+        if (typeof screen !== 'undefined' && screen.orientation && (screen.orientation as any).lock) {
+          await (screen.orientation as any).lock('landscape').catch(() => {});
+        }
+      } catch {}
+    }
+  },
+
+  startCamera: async (facing, res) => {
     if (Platform.OS !== 'web') {
       set({ error: 'Device camera streaming is currently supported in web browsers.' });
       return false;
     }
 
     const desiredFacing = facing ?? get().facingMode;
+    const desiredRes = res ?? get().resolution;
+    const resCfg = RESOLUTION_CONFIG[desiredRes] || RESOLUTION_CONFIG['1080p'];
+
     if (activeMediaStream) {
       activeMediaStream.getTracks().forEach((t) => t.stop());
       activeMediaStream = null;
@@ -69,7 +107,9 @@ export const useCameraStream = create<CameraStreamState>((set, get) => ({
       if (!navigator.mediaDevices?.getUserMedia) {
         const isSecure = typeof window !== 'undefined' ? window.isSecureContext : false;
         if (!isSecure) {
-          throw new Error('Browser blocked camera over HTTP. Run server with --ssl or enable chrome://flags/#unsafely-treat-insecure-origin-as-secure on phone.');
+          throw new Error(
+            'Browser blocked camera over HTTP. Run server with --ssl or enable chrome://flags/#unsafely-treat-insecure-origin-as-secure on phone.',
+          );
         }
         throw new Error('Camera access not supported by this browser.');
       }
@@ -77,8 +117,9 @@ export const useCameraStream = create<CameraStreamState>((set, get) => ({
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: { ideal: desiredFacing },
-          width: { ideal: 960 },
-          height: { ideal: 540 },
+          width: { ideal: resCfg.width },
+          height: { ideal: resCfg.height },
+          aspectRatio: { ideal: 16 / 9 },
         },
         audio: false,
       });
@@ -89,9 +130,21 @@ export const useCameraStream = create<CameraStreamState>((set, get) => ({
         await attachedVideoEl.play().catch(() => {});
       }
 
+      // Try orientation lock to landscape where supported
+      if (typeof screen !== 'undefined' && screen.orientation && (screen.orientation as any).lock) {
+        try {
+          (screen.orientation as any).lock('landscape').catch(() => {});
+        } catch {}
+      }
+
+      const vw = attachedVideoEl?.videoWidth || resCfg.width;
+      const vh = attachedVideoEl?.videoHeight || resCfg.height;
+
       set({
         isCameraActive: true,
         facingMode: desiredFacing,
+        resolution: desiredRes,
+        isLandscape: vw >= vh,
         error: null,
       });
       return true;
@@ -133,10 +186,13 @@ export const useCameraStream = create<CameraStreamState>((set, get) => ({
       return;
     }
 
+    const currentRes = get().resolution;
+    const resCfg = RESOLUTION_CONFIG[currentRes] || RESOLUTION_CONFIG['1080p'];
+
     if (!offscreenCanvas && typeof document !== 'undefined') {
       offscreenCanvas = document.createElement('canvas');
-      offscreenCanvas.width = 640;
-      offscreenCanvas.height = 360;
+      offscreenCanvas.width = resCfg.width;
+      offscreenCanvas.height = resCfg.height;
     }
 
     const wsUrl = `${serverBase.replace(/^http/i, 'ws').replace(/\/+$/, '')}/ws/camera`;
@@ -150,7 +206,6 @@ export const useCameraStream = create<CameraStreamState>((set, get) => ({
     }
 
     broadcastWs = ws;
-    lastFrameCount = 0;
     framesInSecond = 0;
     lastFpsTs = Date.now();
 
@@ -170,7 +225,38 @@ export const useCameraStream = create<CameraStreamState>((set, get) => ({
           return;
         }
 
-        ctx.drawImage(attachedVideoEl, 0, 0, offscreenCanvas.width, offscreenCanvas.height);
+        const activeRes = get().resolution;
+        const cfg = RESOLUTION_CONFIG[activeRes] || RESOLUTION_CONFIG['1080p'];
+        const vw = attachedVideoEl.videoWidth || cfg.width;
+        const vh = attachedVideoEl.videoHeight || cfg.height;
+        const nativeLandscape = vw >= vh;
+
+        if (get().isLandscape !== nativeLandscape) {
+          set({ isLandscape: nativeLandscape });
+        }
+
+        if (offscreenCanvas.width !== cfg.width || offscreenCanvas.height !== cfg.height) {
+          offscreenCanvas.width = cfg.width;
+          offscreenCanvas.height = cfg.height;
+        }
+
+        if (nativeLandscape) {
+          // Native landscape: phone held horizontally
+          ctx.drawImage(attachedVideoEl, 0, 0, cfg.width, cfg.height);
+        } else {
+          // Portrait mode: smart 16:9 landscape center-crop so the stream to HawkEye
+          // is always a pristine 16:9 widescreen frame without anamorphic squashing
+          const cropW = vw;
+          const cropH = Math.round((vw * 9) / 16);
+          const cropX = 0;
+          const cropY = Math.max(0, Math.round((vh - cropH) / 2));
+          ctx.drawImage(
+            attachedVideoEl,
+            cropX, cropY, cropW, cropH,
+            0, 0, cfg.width, cfg.height,
+          );
+        }
+
         offscreenCanvas.toBlob(
           (blob) => {
             if (blob && ws.readyState === WebSocket.OPEN) {
@@ -193,7 +279,7 @@ export const useCameraStream = create<CameraStreamState>((set, get) => ({
             }
           },
           'image/jpeg',
-          0.65,
+          cfg.quality,
         );
       }, 55);
     };
@@ -225,4 +311,3 @@ export const useCameraStream = create<CameraStreamState>((set, get) => ({
     set({ isBroadcasting: false, fps: 0 });
   },
 }));
-

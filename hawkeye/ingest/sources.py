@@ -278,10 +278,11 @@ class PushStreamSource(VideoSource):
         return self
 
     def push_frame(self, frame: np.ndarray) -> None:
-        import cv2
-
-        if self.width and self.height and (frame.shape[1] != self.width or frame.shape[0] != self.height):
-            frame = cv2.resize(frame, (self.width, self.height), interpolation=cv2.INTER_LINEAR)
+        # Dynamically adopt incoming frame dimensions so full phone resolution (1080p/720p)
+        # is preserved without forced downsampling.
+        h, w = frame.shape[:2]
+        self.width = w
+        self.height = h
         with self._lock:
             self._latest_frame = frame
             self._last_push_ts = time.time()

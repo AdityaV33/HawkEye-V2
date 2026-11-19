@@ -49,12 +49,16 @@ export default function CameraScreen() {
     isCameraActive,
     isBroadcasting,
     facingMode,
+    resolution,
+    isLandscape,
     fps,
     framesSent,
     error: streamError,
     startCamera,
     stopCamera,
     toggleFacing,
+    setResolution,
+    requestLandscape,
     startBroadcasting,
     stopBroadcasting,
     attachVideoElement,
@@ -174,8 +178,13 @@ export default function CameraScreen() {
                       bg={isBroadcasting ? palette.greenDim : isCameraActive ? palette.cyanDim : palette.amberDim}
                     />
                     <Badge
-                      label={facingMode === 'environment' ? 'Back Lens' : 'Front Lens'}
-                      fg={palette.textSecondary}
+                      label={resolution === '1080p' ? '1080P FHD' : resolution === '720p' ? '720P HD' : '540P SD'}
+                      fg={palette.cyan}
+                      bg={palette.cyanDim}
+                    />
+                    <Badge
+                      label={isLandscape ? '16:9 Landscape' : '16:9 Crop'}
+                      fg={isLandscape ? palette.green : palette.textSecondary}
                       bg={palette.surfaceElevated}
                     />
                   </View>
@@ -195,6 +204,15 @@ export default function CameraScreen() {
 
                 {/* Viewfinder Bottom Controls */}
                 <View style={styles.hudFooter}>
+                  <PressableScale
+                    onPress={requestLandscape}
+                    style={styles.hudBtn}
+                    accessibilityLabel="Landscape Fullscreen"
+                  >
+                    <Ionicons name="expand-outline" size={18} color={palette.text} />
+                    <Text style={styles.hudBtnText}>Landscape</Text>
+                  </PressableScale>
+
                   <PressableScale
                     onPress={toggleFacing}
                     style={styles.hudBtn}
@@ -218,6 +236,42 @@ export default function CameraScreen() {
                 </View>
               </View>
             </View>
+
+            {/* Resolution Selector Strip */}
+            <View style={styles.resolutionStrip}>
+              <Text style={styles.resolutionLabel}>Resolution:</Text>
+              {(['1080p', '720p', '540p'] as const).map((res) => (
+                <PressableScale
+                  key={res}
+                  onPress={() => {
+                    setResolution(res);
+                    toast.show(`Switched to ${res === '1080p' ? '1080p Full HD' : res.toUpperCase()}`, 'info', 'videocam');
+                  }}
+                  style={[
+                    styles.resChip,
+                    resolution === res && styles.resChipActive,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.resChipText,
+                      resolution === res && styles.resChipTextActive,
+                    ]}
+                  >
+                    {res === '1080p' ? '1080p Full HD' : res === '720p' ? '720p HD' : '540p'}
+                  </Text>
+                </PressableScale>
+              ))}
+            </View>
+
+            {!isLandscape && (
+              <View style={styles.landscapeNotice}>
+                <Ionicons name="phone-landscape-outline" size={14} color={palette.cyan} />
+                <Text style={styles.landscapeNoticeText}>
+                  Default 16:9 landscape active (center-cropped). Rotate phone sideways for wide angle.
+                </Text>
+              </View>
+            )}
 
             {streamError && (
               <View style={styles.errorNotice}>
@@ -788,5 +842,56 @@ const styles = StyleSheet.create({
     ...typography.micro,
     color: palette.textSecondary,
     lineHeight: 16,
+  },
+  resolutionStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    gap: spacing.sm,
+  },
+  resolutionLabel: {
+    ...typography.micro,
+    color: palette.textTertiary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  resChip: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 5,
+    borderRadius: radii.pill,
+    backgroundColor: palette.surfaceElevated,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: palette.hairline,
+  },
+  resChipActive: {
+    backgroundColor: palette.accentDim,
+    borderColor: palette.accent,
+  },
+  resChipText: {
+    ...typography.caption,
+    color: palette.textSecondary,
+    fontWeight: '600',
+    fontSize: 11,
+  },
+  resChipTextActive: {
+    color: palette.accent,
+    fontWeight: '700',
+  },
+  landscapeNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    backgroundColor: palette.cyanDim,
+    borderRadius: radii.md,
+  },
+  landscapeNoticeText: {
+    ...typography.micro,
+    color: palette.cyan,
+    flex: 1,
   },
 });
