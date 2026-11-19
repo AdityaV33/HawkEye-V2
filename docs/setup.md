@@ -1,37 +1,79 @@
-# HawkEye — Setup
+# HawkEye — Setup & Deployment Guide
 
-## macOS (development + training)
+## 1. System Requirements
+- **OS**: Linux (Ubuntu 20.04+, Debian, Arch), macOS (Apple Silicon M1/M2/M3/M4 or Intel), or Windows 10/11 (WSL2 or Native).
+- **Python**: 3.10, 3.11, or 3.12.
+- **Hardware Acceleration**:
+  - NVIDIA GPU (CUDA 12.x) with RTX 30/40/50 series.
+  - Apple Silicon GPU (Metal/MPS).
+  - CPU mode (graceful fallback on standard laptops).
 
+---
+
+## 2. Installation
+
+### On Linux (NVIDIA CUDA) / Windows
 ```bash
-python3.11 -m venv .venv && source .venv/bin/activate
+python3 -m venv .venv
+source .venv/bin/activate
+
+# 1. Install PyTorch with matching CUDA build
+pip install "torch>=2.4" torchvision --index-url https://download.pytorch.org/whl/cu124
+
+# 2. Install remaining dependencies
+pip install -r requirements-cuda.txt
+```
+
+### On macOS / Standard CPU
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
-python scripts/download_models.py         # optional
-python -m hawkeye.run                      # http://127.0.0.1:8000
 ```
 
-macOS camera permission: grant Terminal/iTerm access under *System Settings →
-Privacy & Security → Camera* the first time.
-
-Optional local VLM offline mode:
+### Warm Pretrained Weights (Optional)
 ```bash
-pip install transformers accelerate einops pillow
-python -m hawkeye.run --backend moondream
+python scripts/download_models.py
+```
+*(Pre-downloads YOLO11n-pose and InsightFace face recognition pack so the first run starts instantly).*
+
+---
+
+## 3. Running HawkEye
+
+```bash
+# Start with default webcam:
+python -m hawkeye.run
+
+# Start with desktop screen capture:
+python -m hawkeye.run --source screen
+
+# Loop a video clip:
+python -m hawkeye.run --source clip.mp4
+
+# Run with HTTPS (enables browser camera access from mobile phones):
+python -m hawkeye.run --ssl
 ```
 
-- **Datasets and model weights do NOT travel through git** (gitignored / too big).
+Open **`http://localhost:8000`** in your browser. The unified FastAPI server serves the API, WebSocket stream, and operator web app together on one port.
 
-## Reasoner backends
+---
 
-| Backend | Needs | Notes |
+## 4. Reasoner Backends (Stage B VLM)
+
+| Backend | Requirements | Notes |
 |---|---|---|
-| `mock` | nothing | Templated explanation from Stage A. CI/offline default. |
-| `claude` | `anthropic` + `ANTHROPIC_API_KEY` | Best explanations (the USP). Tiny cost (triggered only). |
-| `moondream` | `transformers` (+ weights on first run) | Fully offline; fits 4 GB VRAM / 8 GB RAM. |
+| `mock` | None (built-in) | Instant templated explanations. Zero cost, ideal for testing. |
+| `claude` | `export ANTHROPIC_API_KEY="..."` | Multimodal Claude 3.5 Sonnet. Best explanations and detailed incident summaries. |
+| `moondream` | `pip install transformers accelerate einops pillow` | Fully offline local VLM. Runs on edge GPUs / Apple Silicon. |
 
-`backend: auto` picks Claude if a key is present, else mock.
+`backend: auto` automatically picks Claude if `ANTHROPIC_API_KEY` is set, otherwise falls back to `mock`.
 
-## Camera options
+---
 
-- Webcam: `--source 0`
-- Video file (loops — great for dataset demos): `--source clip.mp4`
-- Phone as IP camera (install an IP-webcam app): `--source http://<phone-ip>:8080/video`
+## 5. Camera & Video Ingest Options
+
+- **Webcam**: `--source 0`
+- **Desktop Screen**: `--source screen`
+- **Wireless Phone Camera**: Open `https://<laptop-ip>:8000` on your phone browser, go to the **Camera** tab, and press **Broadcast to HawkEye**.
+- **IP Camera / RTSP**: `--source http://<phone-ip>:8080/video` or `--source rtsp://<stream-url>`

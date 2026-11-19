@@ -63,6 +63,8 @@ class Pipeline:
         self._worker_ts: List[threading.Thread] = []
         self._attendance_t: Optional[threading.Thread] = None
         self._retention_t: Optional[threading.Thread] = None
+        self._identity_t: Optional[threading.Thread] = None
+        self._reasoner_t: Optional[threading.Thread] = None
         self._fps = 0.0
         self._NUM_WORKERS = 2
         self._last_logged_incident: Dict[str, float] = {}
@@ -78,10 +80,12 @@ class Pipeline:
             # Loaded in the background (not blocking startup): the model
             # download/prepare can take minutes on first run, and the
             # dashboard/video feed should be usable immediately regardless.
-            threading.Thread(target=self._load_identity, daemon=True).start()
+            self._identity_t = threading.Thread(target=self._load_identity, daemon=True, name="identity-loader")
+            self._identity_t.start()
         # Same reasoning as identity: a lazy-loading reasoner (Moondream) can
         # take minutes on first run, and that must not stall the first trigger.
-        threading.Thread(target=self.reasoner.preload, daemon=True).start()
+        self._reasoner_t = threading.Thread(target=self.reasoner.preload, daemon=True, name="reasoner-preload")
+        self._reasoner_t.start()
         self._running = True
         self.hub.set_status(running=True, reasoner=self.reasoner.name,
                             identity=self.identity.available,
@@ -122,7 +126,15 @@ class Pipeline:
             self._triggers.put_nowait(_SENTINEL)
         except queue.Full:
             pass
-        for t in (self._capture_t, *self._worker_ts, self._attendance_t, self._retention_t):
+        threads = [
+            getattr(self, "_capture_t", None),
+            *getattr(self, "_worker_ts", []),
+            getattr(self, "_attendance_t", None),
+            getattr(self, "_retention_t", None),
+            getattr(self, "_identity_t", None),
+            getattr(self, "_reasoner_t", None),
+        ]
+        for t in threads:
             if t is not None and t.is_alive():
                 t.join(timeout=timeout)
                 if t.is_alive():

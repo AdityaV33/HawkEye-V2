@@ -50,4 +50,4 @@ runs/
 .claude/
 
 # --- Graphify cache ---
-graphify-out/cache/
+graphify-out/
